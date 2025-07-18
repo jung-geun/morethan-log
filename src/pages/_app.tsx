@@ -11,7 +11,7 @@ function App({ Component, pageProps }: AppPropsWithLayout) {
     <QueryClientProvider client={queryClient}>
       <Hydrate state={pageProps.dehydratedState}>
         <RootLayout>{getLayout(<Component {...pageProps} />)}</RootLayout>
-        <Analytics />;
+        <Analytics />
       </Hydrate>
     </QueryClientProvider>
   )
