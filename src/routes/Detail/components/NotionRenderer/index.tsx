@@ -51,11 +51,28 @@ const mapPageUrl = (id: string) => {
 }
 
 type Props = {
-  recordMap: ExtendedRecordMap
+  recordMap: ExtendedRecordMap | null
 }
 
 const NotionRenderer: FC<Props> = ({ recordMap }) => {
   const [scheme] = useScheme()
+  
+  // Handle case where recordMap is not available
+  if (!recordMap) {
+    return (
+      <StyledWrapper>
+        <div style={{ 
+          padding: '2rem', 
+          textAlign: 'center', 
+          color: 'var(--theme-colors-gray11)' 
+        }}>
+          <p>콘텐츠를 불러오는 중 문제가 발생했습니다.</p>
+          <p>잠시 후 다시 시도해주세요.</p>
+        </div>
+      </StyledWrapper>
+    )
+  }
+  
   return (
     <StyledWrapper>
       <_NotionRenderer

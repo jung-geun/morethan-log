@@ -15,10 +15,10 @@ export const getPosts = async () => {
   let id = CONFIG.notionConfig.pageId as string
   const api = new NotionAPI()
 
-  // Retry logic for API calls
+  // Enhanced retry logic for API calls
   let response
   let retryCount = 0
-  const maxRetries = 3
+  const maxRetries = 5 // Increased retries
 
   while (retryCount < maxRetries) {
     try {
@@ -28,13 +28,31 @@ export const getPosts = async () => {
       retryCount++
       console.warn(`NotionAPI attempt ${retryCount} failed:`, error.message)
       
-      if (retryCount === maxRetries) {
-        console.error('NotionAPI failed after all retries')
-        return []
+      // Special handling for 406 errors
+      if (error.response?.status === 406) {
+        console.warn(`Notion API returned 406 (Not Acceptable) - attempt ${retryCount}`)
+        if (retryCount === maxRetries) {
+          console.error('NotionAPI 406 error persists after all retries')
+          return [] // Return empty array instead of failing completely
+        }
+        // Longer wait for 406 errors
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 2000))
+      } else if (error.response?.status === 502) {
+        console.warn(`Notion API returned 502 (Bad Gateway) - attempt ${retryCount}`)
+        if (retryCount === maxRetries) {
+          console.error('NotionAPI 502 error persists after all retries')
+          return []
+        }
+        // Wait for 502 errors
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1500))
+      } else {
+        if (retryCount === maxRetries) {
+          console.error('NotionAPI failed after all retries')
+          return []
+        }
+        // Standard exponential backoff for other errors
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
       }
-      
-      // Wait before retry (exponential backoff)
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
     }
   }
 

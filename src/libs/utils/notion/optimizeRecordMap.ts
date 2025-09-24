@@ -3,7 +3,11 @@ import { ExtendedRecordMap } from "notion-types"
 /**
  * Optimize record map by removing unnecessary data to reduce bundle size
  */
-export const optimizeRecordMap = (recordMap: ExtendedRecordMap): ExtendedRecordMap => {
+export const optimizeRecordMap = (recordMap: ExtendedRecordMap | null | undefined): ExtendedRecordMap | null => {
+  if (!recordMap) {
+    return null
+  }
+
   const optimized = { ...recordMap }
 
   // Remove preview images to reduce size

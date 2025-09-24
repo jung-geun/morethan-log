@@ -30,25 +30,59 @@ export const getStaticPaths = async () => {
 export const getStaticProps: GetStaticProps = async (context) => {
   const slug = context.params?.slug
 
-  const posts = await getPosts()
-  const feedPosts = filterPosts(posts)
-  await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
+  try {
+    const posts = await getPosts()
+    const feedPosts = filterPosts(posts)
+    await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
 
-  const detailPosts = filterPosts(posts, filter)
-  const postDetail = detailPosts.find((t: any) => t.slug === slug)
-  const rawRecordMap = await getRecordMap(postDetail?.id!)
-  const recordMap = optimizeRecordMap(rawRecordMap)
+    const detailPosts = filterPosts(posts, filter)
+    const postDetail = detailPosts.find((t: any) => t.slug === slug)
+    
+    // If post is not found, return 404
+    if (!postDetail) {
+      return {
+        notFound: true,
+      }
+    }
 
-  await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({
-    ...postDetail,
-    recordMap,
-  }))
+    try {
+      const rawRecordMap = await getRecordMap(postDetail?.id!)
+      const recordMap = optimizeRecordMap(rawRecordMap)
 
-  return {
-    props: {
-      dehydratedState: dehydrate(queryClient),
-    },
-    revalidate: CONFIG.revalidateTime,
+      await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({
+        ...postDetail,
+        recordMap,
+      }))
+
+      return {
+        props: {
+          dehydratedState: dehydrate(queryClient),
+        },
+        revalidate: CONFIG.revalidateTime,
+      }
+    } catch (recordMapError) {
+      console.error(`Failed to get record map for ${slug}:`, recordMapError)
+      
+      // Return basic post data without recordMap as fallback
+      await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({
+        ...postDetail,
+        recordMap: null,
+      }))
+
+      return {
+        props: {
+          dehydratedState: dehydrate(queryClient),
+        },
+        revalidate: 60, // Shorter revalidate time for failed pages
+      }
+    }
+  } catch (error) {
+    console.error(`Error in getStaticProps for ${slug}:`, error)
+    
+    // Return 404 if everything fails
+    return {
+      notFound: true,
+    }
   }
 }
 
