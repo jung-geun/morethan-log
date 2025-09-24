@@ -10,7 +10,10 @@ import { dehydrate } from "@tanstack/react-query"
 import { filterPosts } from "src/libs/utils/notion"
 
 export const getStaticProps: GetStaticProps = async () => {
-  const posts = filterPosts(await getPosts())
+  const posts = filterPosts(await getPosts(), {
+    acceptStatus: ["Public"],
+    acceptType: ["Post", "Paper"], // Paper 타입도 메인페이지에 포함
+  })
   await queryClient.prefetchQuery(queryKey.posts(), () => posts)
 
   return {

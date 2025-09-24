@@ -1,5 +1,5 @@
 import Detail from "src/routes/Detail"
-import { filterPosts } from "src/libs/utils/notion"
+import { filterPosts, optimizeRecordMap } from "src/libs/utils/notion"
 import { CONFIG } from "site.config"
 import { NextPageWithLayout } from "../types"
 import CustomError from "src/routes/Error"
@@ -36,7 +36,8 @@ export const getStaticProps: GetStaticProps = async (context) => {
 
   const detailPosts = filterPosts(posts, filter)
   const postDetail = detailPosts.find((t: any) => t.slug === slug)
-  const recordMap = await getRecordMap(postDetail?.id!)
+  const rawRecordMap = await getRecordMap(postDetail?.id!)
+  const recordMap = optimizeRecordMap(rawRecordMap)
 
   await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({
     ...postDetail,

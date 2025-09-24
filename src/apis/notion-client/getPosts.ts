@@ -15,7 +15,34 @@ export const getPosts = async () => {
   let id = CONFIG.notionConfig.pageId as string
   const api = new NotionAPI()
 
-  const response = await api.getPage(id)
+  // Retry logic for API calls
+  let response
+  let retryCount = 0
+  const maxRetries = 3
+
+  while (retryCount < maxRetries) {
+    try {
+      response = await api.getPage(id)
+      break
+    } catch (error: any) {
+      retryCount++
+      console.warn(`NotionAPI attempt ${retryCount} failed:`, error.message)
+      
+      if (retryCount === maxRetries) {
+        console.error('NotionAPI failed after all retries')
+        return []
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000))
+    }
+  }
+
+  if (!response) {
+    console.error('Failed to get response from Notion API')
+    return []
+  }
+
   id = idToUuid(id)
   const collection = Object.values(response.collection)[0]?.value
   const block = response.block

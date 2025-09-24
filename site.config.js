@@ -5,7 +5,7 @@ const CONFIG = {
     image: "/avatar.svg", // If you want to create your own notion avatar, check out https://notion-avatar.vercel.app
     role: "system developer",
     bio: "I develop everything using everyting.",
-    email: "pieroot.02@gmail.com",
+    email: "pieroot@konkuk.ac.kr",
     linkedin: "pieroot",
     github: "jung-geun",
     instagram: "__jung__02",
@@ -23,7 +23,7 @@ const CONFIG = {
   // blog setting (required)
   blog: {
     title: "pieroot log",
-    description: "welcome to pieroot blog!",
+    description: "welcome to pieroot's logs!",
     scheme: "system", // 'light' | 'dark' | 'system'
   },
 
