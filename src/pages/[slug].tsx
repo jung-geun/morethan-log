@@ -3,7 +3,7 @@ import { filterPosts, optimizeRecordMap } from "src/libs/utils/notion"
 import { CONFIG } from "site.config"
 import { NextPageWithLayout } from "../types"
 import CustomError from "src/routes/Error"
-import { getRecordMap, getPosts } from "src/apis"
+import { getRecordMap, getPosts, getPostBySlug } from "src/apis"
 import MetaConfig from "src/components/MetaConfig"
 import { GetStaticProps } from "next"
 import { queryClient } from "src/libs/react-query"
@@ -36,13 +36,23 @@ export const getStaticProps: GetStaticProps = async (context) => {
     await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
 
     const detailPosts = filterPosts(posts, filter)
-    const postDetail = detailPosts.find((t: any) => t.slug === slug)
+    let postDetail = detailPosts.find((t: any) => t.slug === slug)
     
-    // If post is not found, return 404
+    // If post is not found in build-time posts, try to fetch directly from Notion
     if (!postDetail) {
-      return {
-        notFound: true,
+      console.log(`Post not found in build-time list, searching Notion for slug: ${slug}`)
+      const notionPost = await getPostBySlug(slug as string)
+      
+      // If still not found, return 404
+      if (!notionPost) {
+        console.log(`Post with slug ${slug} not found in Notion`)
+        return {
+          notFound: true,
+        }
       }
+      
+      console.log(`Successfully found post in Notion: ${notionPost.title}`)
+      postDetail = notionPost
     }
 
     try {
