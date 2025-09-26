@@ -14,7 +14,14 @@ export const getStaticProps: GetStaticProps = async () => {
     acceptStatus: ["Public"],
     acceptType: ["Post", "Paper"], // Paper 타입도 메인페이지에 포함
   })
-  await queryClient.prefetchQuery(queryKey.posts(), () => posts)
+  
+  // React Query 캐시에 데이터 저장 (더 오래 유지되도록 설정)
+  await queryClient.prefetchQuery({
+    queryKey: queryKey.posts(),
+    queryFn: () => posts,
+    staleTime: 10 * 60 * 1000, // 10분 동안 fresh 유지
+    cacheTime: 60 * 60 * 1000, // 1시간 동안 캐시 보관
+  })
 
   return {
     props: {
