@@ -6,12 +6,25 @@ export default function getAllPageIds(
   viewId?: string
 ) {
   const collectionQuery = response.collection_query
+  
+  // collectionQuery가 비어있거나 유효하지 않은 경우 처리
+  if (!collectionQuery || Object.keys(collectionQuery).length === 0) {
+    console.warn('Collection query is empty or undefined - API may have returned incomplete data')
+    return []
+  }
+  
   const views = Object.values(collectionQuery)[0]
+  
+  // views가 유효하지 않은 경우 처리
+  if (!views) {
+    console.warn('Views is undefined or null in collection query')
+    return []
+  }
 
   let pageIds: ID[] = []
   if (viewId) {
     const vId = idToUuid(viewId)
-    pageIds = views[vId]?.blockIds
+    pageIds = views[vId]?.blockIds || []
   } else {
     const pageSet = new Set<ID>()
     // * type not exist

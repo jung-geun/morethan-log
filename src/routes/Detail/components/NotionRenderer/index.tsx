@@ -3,6 +3,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { ExtendedRecordMap } from "notion-types"
 import useScheme from "src/hooks/useScheme"
+import { customMapImageUrl } from "src/libs/utils/notion"
 
 // core styles shared by all of react-notion-x (required)
 import "react-notion-x/src/styles.css"
@@ -88,6 +89,7 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
           nextLink: Link,
         }}
         mapPageUrl={mapPageUrl}
+        mapImageUrl={customMapImageUrl}
       />
     </StyledWrapper>
   )

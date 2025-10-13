@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next"
 import { getPosts } from "../../apis"
+import { TPost } from "../../types"
 
 // for all path revalidate, https://<your-site.com>/api/revalidate?secret=<token>
 // for specific path revalidate, https://<your-site.com>/api/revalidate?secret=<token>&path=<path>
@@ -18,7 +19,7 @@ export default async function handler(
       await res.revalidate(path)
     } else {
       const posts = await getPosts()
-      const revalidateRequests = posts.map((row) =>
+      const revalidateRequests = posts.map((row: TPost) =>
         res.revalidate(`/${row.slug}`)
       )
       await Promise.all(revalidateRequests)
