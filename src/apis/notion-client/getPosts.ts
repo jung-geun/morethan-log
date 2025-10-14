@@ -65,7 +65,11 @@ export const getPosts = async (): Promise<TPosts> => {
                   if (key === 'Status' || key === 'status') {
                     post.status = [prop.select.name]
                   } else if (key === 'Type' || key === 'type') {
-                    post.type = [prop.select.name]
+                    // Normalize type to start with uppercase (Post, Paper, Page)
+                    const typeValue = prop.select.name
+                    const normalizedType = typeValue.charAt(0).toUpperCase() + typeValue.slice(1).toLowerCase()
+                    console.log(`🔄 [getPosts] Type normalization: "${typeValue}" -> "${normalizedType}" (slug: ${post.slug})`)
+                    post.type = [normalizedType]
                   } else if (key === 'Category' || key === 'category') {
                     post.category = [prop.select.name]  // Array format for consistency
                   }
@@ -123,10 +127,15 @@ export const getPosts = async (): Promise<TPosts> => {
         return post as TPost
       })
 
-      // Filter out posts without 'Public' status
-      const publicPosts = posts.filter(post => 
-        post.status && post.status.includes('Public')
-      )
+      // Filter out posts without 'Public' or 'PublicOnDetail' status
+      const publicPosts = posts.filter(post => {
+        const status = post.status?.[0]
+        const isPublic = status === 'Public' || status === 'PublicOnDetail'
+        if (!isPublic && post.slug) {
+          console.log(`🔒 [getPosts] Filtered out (not public): slug="${post.slug}", status="${status}"`)
+        }
+        return isPublic
+      })
 
       // Sort by date (newest first)
       publicPosts.sort((a, b) => {

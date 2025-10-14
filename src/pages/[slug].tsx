@@ -18,11 +18,22 @@ const filter: FilterPostsOptions = {
 }
 
 export const getStaticPaths = async () => {
+  console.log('\n🔍 [getStaticPaths] Generating static paths...')
+  
   const posts = await getPosts()
+  console.log(`🔍 [getStaticPaths] Total posts: ${posts.length}`)
+  
   const filteredPost = filterPosts(posts, filter)
+  console.log(`🔍 [getStaticPaths] Filtered posts: ${filteredPost.length}`)
+  
+  const paths = filteredPost.map((row) => `/${row.slug}`)
+  console.log(`🔍 [getStaticPaths] Generated paths:`, paths)
+  
+  const hasAbout = paths.includes('/about')
+  console.log(`🔍 [getStaticPaths] About page included: ${hasAbout}`)
 
   return {
-    paths: filteredPost.map((row) => `/${row.slug}`),
+    paths,
     fallback: true,
   }
 }
@@ -30,28 +41,45 @@ export const getStaticPaths = async () => {
 export const getStaticProps: GetStaticProps = async (context) => {
   const slug = context.params?.slug
 
+  console.log(`\n🔍 [getStaticProps] Processing slug: "${slug}"`)
+
   try {
     const posts = await getPosts()
+    console.log(`🔍 [getStaticProps] Total posts from Notion: ${posts.length}`)
+    
     const feedPosts = filterPosts(posts)
     await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
 
+    console.log(`🔍 [getStaticProps] Filtering posts with detail filter:`, filter)
     const detailPosts = filterPosts(posts, filter)
+    console.log(`🔍 [getStaticProps] Detail posts after filter: ${detailPosts.length}`)
+    
     let postDetail = detailPosts.find((t: any) => t.slug === slug)
+    
+    if (postDetail) {
+      console.log(`✅ [getStaticProps] Found post in filtered list:`, {
+        id: postDetail.id,
+        title: postDetail.title,
+        slug: postDetail.slug,
+        status: postDetail.status,
+        type: postDetail.type
+      })
+    }
     
     // If post is not found in build-time posts, try to fetch directly from Notion
     if (!postDetail) {
-      console.log(`Post not found in build-time list, searching Notion for slug: ${slug}`)
+      console.log(`⚠️  [getStaticProps] Post not found in build-time list, searching Notion for slug: ${slug}`)
       const notionPost = await getPostBySlug(slug as string)
       
       // If still not found, return 404
       if (!notionPost) {
-        console.log(`Post with slug ${slug} not found in Notion`)
+        console.log(`❌ [getStaticProps] Post with slug ${slug} not found in Notion`)
         return {
           notFound: true,
         }
       }
       
-      console.log(`Successfully found post in Notion: ${notionPost.title}`)
+      console.log(`✅ [getStaticProps] Successfully found post in Notion: ${notionPost.title}`)
       postDetail = notionPost
     }
 

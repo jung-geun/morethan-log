@@ -86,23 +86,13 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
         break
         
       case 'image':
-        let imageUrl = blockData.file?.url || blockData.external?.url
+        const imageUrl = blockData.file?.url || blockData.external?.url
         if (imageUrl) {
-          // Remove AWS signature from S3 URLs to avoid double encoding
-          if (imageUrl.startsWith('https://prod-files-secure.s3.us-west-2.amazonaws.com')) {
-            try {
-              const u = new URL(imageUrl)
-              // Keep only origin + pathname, remove AWS signature query params
-              imageUrl = u.origin + u.pathname
-              console.log('🖼️ Cleaned image URL (removed AWS signature):', imageUrl)
-            } catch (error) {
-              console.error('Failed to clean image URL:', error)
-            }
-          }
+          console.log('🖼️ Image URL from Notion API:', imageUrl)
           
           properties.source = [[imageUrl]]
           
-          // Add format for image display
+          // Add format for image display  
           format.display_source = imageUrl
         }
         if (blockData.caption && blockData.caption.length > 0) {
