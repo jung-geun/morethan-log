@@ -5,6 +5,11 @@ import { queryClient } from "src/libs/react-query"
 import { Analytics } from "@vercel/analytics/next"
 import GoogleAnalytics from "src/components/GoogleAnalytics"
 
+// Disable console.log in production
+if (process.env.NODE_ENV === 'production') {
+  console.log = () => {}
+}
+
 function App({ Component, pageProps }: AppPropsWithLayout) {
   const getLayout = Component.getLayout || ((page) => page)
 

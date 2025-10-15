@@ -6,7 +6,9 @@ import { getPosts } from "./getPosts"
  * This function searches through all posts to find one with matching slug
  */
 export const getPostBySlug = async (slug: string): Promise<TPost | null> => {
-  console.log(`🔍 Searching for post with slug: ${slug}`)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`🔍 Searching for post with slug: ${slug}`)
+  }
   
   // Get all posts and find the one with matching slug
   const posts = await getPosts()
@@ -15,10 +17,14 @@ export const getPostBySlug = async (slug: string): Promise<TPost | null> => {
   const post = posts.find(p => p.slug === slug)
   
   if (post) {
-    console.log(`✅ Found post with slug: ${slug}`)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✅ Found post with slug: ${slug}`)
+    }
     return post
   }
 
-  console.log(`❌ No post found with slug: ${slug}`)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`❌ No post found with slug: ${slug}`)
+  }
   return null
 }

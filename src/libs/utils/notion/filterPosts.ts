@@ -1,4 +1,5 @@
 import { TPosts, TPostStatus, TPostType } from "src/types"
+import { debugLog } from "src/libs/utils/logger"
 
 export type FilterPostsOptions = {
   acceptStatus?: TPostStatus[]
@@ -20,7 +21,7 @@ export function filterPosts(
 ) {
   const { acceptStatus = ["Public"], acceptType = ["Post"] } = options
   
-  console.log(`🔍 [filterPosts] Filtering ${posts.length} posts with options:`, {
+  debugLog(`🔍 [filterPosts] Filtering ${posts.length} posts with options:`, {
     acceptStatus,
     acceptType
   })
@@ -32,7 +33,7 @@ export function filterPosts(
       const isValid = !(!post.title || !post.slug || postDate > tomorrow)
       
       if (!isValid) {
-        console.log(`  ❌ [filterPosts] Rejected (invalid data): slug="${post.slug}", title="${post.title}"`)
+        debugLog(`  ❌ [filterPosts] Rejected (invalid data): slug="${post.slug}", title="${post.title}"`)
       }
       
       return isValid
@@ -43,9 +44,9 @@ export function filterPosts(
       const isAccepted = acceptStatus.includes(postStatus)
       
       if (!isAccepted) {
-        console.log(`  ❌ [filterPosts] Rejected (status): slug="${post.slug}", status="${postStatus}"`)
+        debugLog(`  ❌ [filterPosts] Rejected (status): slug="${post.slug}", status="${postStatus}"`)
       } else if (post.slug === 'about') {
-        console.log(`  ✅ [filterPosts] About page passed status filter: status="${postStatus}"`)
+        debugLog(`  ✅ [filterPosts] About page passed status filter: status="${postStatus}"`)
       }
       
       return isAccepted
@@ -56,20 +57,20 @@ export function filterPosts(
       const isAccepted = acceptType.includes(postType)
       
       if (!isAccepted) {
-        console.log(`  ❌ [filterPosts] Rejected (type): slug="${post.slug}", type="${postType}"`)
+        debugLog(`  ❌ [filterPosts] Rejected (type): slug="${post.slug}", type="${postType}"`)
       } else if (post.slug === 'about') {
-        console.log(`  ✅ [filterPosts] About page passed type filter: type="${postType}"`)
+        debugLog(`  ✅ [filterPosts] About page passed type filter: type="${postType}"`)
       }
       
       return isAccepted
     })
   
-  console.log(`🔍 [filterPosts] Result: ${filteredPosts.length} posts after filtering`)
+  debugLog(`🔍 [filterPosts] Result: ${filteredPosts.length} posts after filtering`)
   
   // Log about page specifically
   const aboutPage = filteredPosts.find(p => p.slug === 'about')
   if (aboutPage) {
-    console.log(`  ✅ About page found in filtered results:`, {
+    debugLog(`  ✅ About page found in filtered results:`, {
       id: aboutPage.id,
       title: aboutPage.title,
       slug: aboutPage.slug,
@@ -77,10 +78,10 @@ export function filterPosts(
       type: aboutPage.type
     })
   } else {
-    console.log(`  ⚠️  About page NOT in filtered results`)
+    debugLog(`  ⚠️  About page NOT in filtered results`)
     const aboutInOriginal = posts.find(p => p.slug === 'about')
     if (aboutInOriginal) {
-      console.log(`  ℹ️  But about page exists in original posts:`, {
+      debugLog(`  ℹ️  But about page exists in original posts:`, {
         id: aboutInOriginal.id,
         title: aboutInOriginal.title,
         slug: aboutInOriginal.slug,

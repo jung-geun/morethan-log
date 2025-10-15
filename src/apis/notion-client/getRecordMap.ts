@@ -173,6 +173,19 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           })
         }
         break
+        
+      case 'child_database':
+        // Database block - store metadata for placeholder rendering
+        console.log('📊 [getRecordMap] Found child_database block:', block.id)
+        if (blockData.title) {
+          properties.title = convertRichText(blockData.title)
+        }
+        // Store database ID for future custom rendering (Option 3)
+        // Use block.id as database_id (the child_database block itself)
+        if (block.id) {
+          format.database_id = block.id
+        }
+        break
     }
     
     // Handle color for all block types
@@ -207,6 +220,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
     'table_row': 'table_row',
     'embed': 'embed',
     'link_preview': 'bookmark',
+    'child_database': 'collection_view_page', // Temporary: use collection_view_page for placeholder
   }
   
   const mappedType = typeMapping[block.type] || block.type

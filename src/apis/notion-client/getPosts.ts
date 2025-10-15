@@ -18,8 +18,10 @@ export const getPosts = async (): Promise<TPosts> => {
   const cacheKey = `posts_${dataSourceId}`
   const cachedData = notionCache.get(cacheKey)
   if (cachedData) {
-    console.log('✅ Using cached posts data')
-    return cachedData
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ Cache hit for:', cacheKey)
+    }
+    return cachedData as TPosts
   }
   
   const notion = getOfficialNotionClient()

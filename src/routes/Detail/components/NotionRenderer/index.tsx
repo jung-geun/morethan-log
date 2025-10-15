@@ -4,6 +4,8 @@ import Link from "next/link"
 import { ExtendedRecordMap } from "notion-types"
 import useScheme from "src/hooks/useScheme"
 import { customMapImageUrl } from "src/libs/utils/notion"
+import DatabasePlaceholder from "src/components/DatabasePlaceholder"
+import { useDatabasePlaceholderEffect } from "./useDatabasePlaceholderEffect"
 
 // core styles shared by all of react-notion-x (required)
 import "react-notion-x/src/styles.css"
@@ -73,7 +75,21 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
       </StyledWrapper>
     )
   }
+
+  // Find all database blocks
+  const databaseBlocks: Array<{blockId: string; databaseId: string; title: string}> = []
   
+  Object.entries(recordMap.block).forEach(([blockId, blockData]) => {
+    if (blockData.value.type === 'collection_view_page') {
+      const databaseId = (blockData.value.format as any)?.database_id || blockId
+      const title = blockData.value.properties?.title?.[0]?.[0] || '데이터베이스'
+      databaseBlocks.push({ blockId, databaseId, title })
+    }
+  })
+
+  // Use effect to inject placeholders after render
+  useDatabasePlaceholderEffect()
+
   return (
     <StyledWrapper>
       <_NotionRenderer
@@ -91,6 +107,17 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
         mapPageUrl={mapPageUrl}
         mapImageUrl={customMapImageUrl}
       />
+      
+      {/* Render database placeholders inline - they will be positioned by CSS */}
+      {databaseBlocks.map(({ blockId, databaseId, title }) => (
+        <div
+          key={`placeholder-${blockId}`}
+          data-database-id={blockId}
+          className="database-placeholder-wrapper"
+        >
+          <DatabasePlaceholder databaseId={databaseId} title={title} />
+        </div>
+      ))}
     </StyledWrapper>
   )
 }
@@ -107,5 +134,34 @@ const StyledWrapper = styled.div`
   }
   .notion-list {
     width: 100%;
+  }
+  
+  /* Hide default collection_view_page rendering - we use custom DatabasePlaceholder */
+  .notion-collection_view_page,
+  .notion-collection-view,
+  .notion-collection_view {
+    display: none !important;
+  }
+  
+  /* Database placeholder wrappers */
+  .database-placeholder-wrapper {
+    margin: 1rem 0;
+  }
+  
+  /* Always show code block copy button */
+  .notion-code-copy {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  .notion-code-copy-button {
+    opacity: 1 !important;
+    visibility: visible !important;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+    
+    &:hover {
+      opacity: 0.7 !important;
+    }
   }
 `
