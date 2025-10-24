@@ -101,7 +101,14 @@ export const customMapImageUrl = (url: string, block?: Block): string => {
   }
   notionImageUrlV2.searchParams.set('cache', 'v2')
 
-  url = notionImageUrlV2.toString()
+  const finalUrl = notionImageUrlV2.toString()
 
-  return url
+  // Proxy the final Notion image URL through our image proxy so that all
+  // thumbnails (main feed + detail pages) consistently go through a single
+  // caching layer. Using an absolute URL when NEXT_PUBLIC_SITE_URL is set
+  // avoids issues with double-wrapping in nested rendering contexts.
+  const site = process.env.NEXT_PUBLIC_SITE_URL || ''
+  const prefix = site ? site.replace(/\/$/, '') : ''
+
+  return `${prefix}/api/image-proxy?url=${encodeURIComponent(finalUrl)}`
 }
