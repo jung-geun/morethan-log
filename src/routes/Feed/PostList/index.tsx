@@ -17,6 +17,26 @@ const PostList: React.FC<Props> = ({ q }) => {
   const currentCategory = `${router.query.category || ``}` || DEFAULT_CATEGORY
   const currentOrder = `${router.query.order || ``}` || "desc"
 
+  // Persist UI filters across navigation using sessionStorage as a fallback.
+  // This allows the feed to remember the user's selected tag/category/order
+  // even after navigating into a post and returning.
+  const STORAGE_KEY = 'feed.filters'
+
+  // If router query doesn't contain values (e.g., when navigating back),
+  // restore from sessionStorage.
+  const storedRaw = typeof window !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY) : null
+  let stored: { tag?: string; category?: string; order?: string } | null = null
+  try {
+    stored = storedRaw ? JSON.parse(storedRaw) : null
+  } catch {
+    stored = null
+  }
+
+  const effectiveTag = currentTag || (stored && stored.tag) || undefined
+  const effectiveCategory =
+    (router.query.category as string) || (stored && stored.category) || DEFAULT_CATEGORY
+  const effectiveOrder = currentOrder || (stored && stored.order) || 'desc'
+
   useEffect(() => {
     setFilteredPosts(() => {
       let newFilteredPosts = data
@@ -28,27 +48,36 @@ const PostList: React.FC<Props> = ({ q }) => {
       })
 
       // tag
-      if (currentTag) {
+      if (effectiveTag) {
         newFilteredPosts = newFilteredPosts.filter(
-          (post) => post && post.tags && post.tags.includes(currentTag)
+          (post) => post && post.tags && post.tags.includes(effectiveTag as string)
         )
       }
 
       // category
-      if (currentCategory !== DEFAULT_CATEGORY) {
+      if (effectiveCategory !== DEFAULT_CATEGORY) {
         newFilteredPosts = newFilteredPosts.filter(
-          (post) =>
-            post && post.category && post.category.includes(currentCategory)
+          (post) => post && post.category && post.category.includes(effectiveCategory)
         )
       }
       // order
-      if (currentOrder !== "desc") {
+      if (effectiveOrder !== "desc") {
         newFilteredPosts = newFilteredPosts.reverse()
       }
 
       return newFilteredPosts
     })
-  }, [data, q, currentTag, currentCategory, currentOrder])
+  }, [data, q, effectiveTag, effectiveCategory, effectiveOrder])
+
+  // Persist the filter choices whenever they change so they survive navigation.
+  useEffect(() => {
+    try {
+      const payload = JSON.stringify({ tag: effectiveTag, category: effectiveCategory, order: effectiveOrder })
+      sessionStorage.setItem(STORAGE_KEY, payload)
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [effectiveTag, effectiveCategory, effectiveOrder])
 
   return (
     <>

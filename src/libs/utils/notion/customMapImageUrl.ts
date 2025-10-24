@@ -1,6 +1,11 @@
 import { Block } from 'notion-types'
 
-export const customMapImageUrl = (url: string, block: Block): string => {
+export const customMapImageUrl = (url: string, block?: Block): string => {
+  // 함수 호출 여부 확인 로그
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('🔍 [customMapImageUrl] Called with URL:', url.substring(0, 100))
+  }
+  
   if (!url) {
     throw new Error("URL can't be empty")
   }
@@ -9,16 +14,42 @@ export const customMapImageUrl = (url: string, block: Block): string => {
     return url
   }
 
+  // Avoid double-wrapping: if the URL is already pointing to our proxy, return it
+  try {
+    if (url.includes('/api/image-proxy') || decodeURIComponent(url).includes('/api/image-proxy')) {
+      return url
+    }
+  } catch (e) {
+    // ignore decode errors and continue
+  }
+
   // more recent versions of notion don't proxy unsplash images
   if (url.startsWith('https://images.unsplash.com')) {
     return url
   }
 
-  // Keep Official Notion API signed S3 URLs as-is
-  // AWS signatures are valid and allow direct access
+  // Proxy Notion's signed S3 URLs through our API to avoid expiration
+  // This allows Next.js to cache the images and serve them even after the signed URL expires
   if (url.startsWith('https://prod-files-secure.s3.us-west-2.amazonaws.com')) {
-    console.log('🔍 [customMapImageUrl] Using AWS signed S3 URL:', url.substring(0, 100) + '...')
-    return url
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [customMapImageUrl] Proxying AWS signed S3 URL')
+    }
+    // Use our image proxy API to cache the image.
+    // Return an absolute URL (helps avoid relative-path double-wrapping
+    // when pages are rendered in different contexts).
+    const site = process.env.NEXT_PUBLIC_SITE_URL || ''
+    const prefix = site ? site.replace(/\/$/, '') : ''
+    return `${prefix}/api/image-proxy?url=${encodeURIComponent(url)}`
+  }
+  
+  // Also proxy other S3 URLs that might expire
+  if (url.includes('amazonaws.com') && url.includes('X-Amz-Signature')) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [customMapImageUrl] Proxying S3 signed URL')
+    }
+    const site = process.env.NEXT_PUBLIC_SITE_URL || ''
+    const prefix = site ? site.replace(/\/$/, '') : ''
+    return `${prefix}/api/image-proxy?url=${encodeURIComponent(url)}`
   }
 
   try {
@@ -58,12 +89,16 @@ export const customMapImageUrl = (url: string, block: Block): string => {
   }`
 
   const notionImageUrlV2 = new URL(url)
-  let table = block.parent_table === 'space' ? 'block' : block.parent_table
-  if (table === 'collection' || table === 'team') {
-    table = 'block'
+  
+  // Block parameter is optional, only use it if provided
+  if (block) {
+    let table = block.parent_table === 'space' ? 'block' : block.parent_table
+    if (table === 'collection' || table === 'team') {
+      table = 'block'
+    }
+    notionImageUrlV2.searchParams.set('table', table)
+    notionImageUrlV2.searchParams.set('id', block.id)
   }
-  notionImageUrlV2.searchParams.set('table', table)
-  notionImageUrlV2.searchParams.set('id', block.id)
   notionImageUrlV2.searchParams.set('cache', 'v2')
 
   url = notionImageUrlV2.toString()

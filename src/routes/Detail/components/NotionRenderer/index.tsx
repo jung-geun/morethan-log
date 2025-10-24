@@ -59,7 +59,9 @@ type Props = {
 
 const NotionRenderer: FC<Props> = ({ recordMap }) => {
   const [scheme] = useScheme()
-  
+  // Call hook unconditionally (must not be called conditionally after an early return)
+  useDatabasePlaceholderEffect()
+
   // Handle case where recordMap is not available
   if (!recordMap) {
     return (
@@ -87,8 +89,7 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
     }
   })
 
-  // Use effect to inject placeholders after render
-  useDatabasePlaceholderEffect()
+  // Use effect to inject placeholders after render (hook is called above unconditionally)
 
   return (
     <StyledWrapper>

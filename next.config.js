@@ -6,6 +6,8 @@ module.exports = {
       's3-us-west-2.amazonaws.com',
       'prod-files-secure.s3.us-west-2.amazonaws.com'  // Notion official API images
     ],
+    // Enable image optimization with longer cache
+    minimumCacheTTL: 31536000, // 1 year in seconds
   },
   // Generate 404 page instead of failing build for missing pages
   generateBuildId: async () => {

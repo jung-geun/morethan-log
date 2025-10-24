@@ -1,12 +1,13 @@
 import { CONFIG } from "site.config"
 import { TPosts, TPost } from "src/types"
 import { getOfficialNotionClient } from "./notionClient"
+import { customMapImageUrl } from "src/libs/utils/notion/customMapImageUrl"
 const { notionCache } = require("src/libs/notionCache")
 
 /**
  * Fetch all posts from Notion database using official @notionhq/client
  */
-export const getPosts = async (): Promise<TPosts> => {
+export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPosts> => {
   const dataSourceId = process.env.NOTION_DATASOURCE_ID
   
   if (!dataSourceId) {
@@ -16,7 +17,8 @@ export const getPosts = async (): Promise<TPosts> => {
   
   // Check cache first
   const cacheKey = `posts_${dataSourceId}`
-  const cachedData = notionCache.get(cacheKey)
+  const bypass = options?.bypassCache === true
+  const cachedData = bypass ? null : notionCache.get(cacheKey)
   if (cachedData) {
     if (process.env.NODE_ENV !== 'production') {
       console.log('✅ Cache hit for:', cacheKey)
@@ -102,14 +104,47 @@ export const getPosts = async (): Promise<TPosts> => {
                   if (key === 'Slug' || key === 'slug') {
                     post.slug = prop.url
                   } else if (key === 'Thumbnail' || key === 'thumbnail') {
-                    post.thumbnail = prop.url
+                    try {
+                      // Diagnostic: if the Notion-provided URL is an S3 URL but
+                      // appears to be missing signature params, record it for
+                      // investigation before attempting to proxy.
+                      try {
+                        if (String(prop.url).includes('amazonaws.com') && !String(prop.url).includes('X-Amz-Signature')) {
+                          try {
+                            const diagDir = require('path').resolve(process.cwd(), 'logs')
+                            if (!require('fs').existsSync(diagDir)) require('fs').mkdirSync(diagDir, { recursive: true })
+                            const diagFile = require('path').join(diagDir, 'notion-image-diagnostics.jsonl')
+                            const rec = {
+                              timestamp: new Date().toISOString(),
+                              pageId: page.id,
+                              propertyKey: key,
+                              rawUrl: String(prop.url).slice(0, 2000)
+                            }
+                            require('fs').appendFileSync(diagFile, JSON.stringify(rec) + '\n')
+                          } catch (e) {
+                            console.log('[getPosts] failed to write diagnostic', (e as any).message)
+                          }
+                        }
+                      } catch (e) {
+                        // ignore diagnostic failures
+                      }
+
+                      post.thumbnail = customMapImageUrl(prop.url)
+                    } catch (e) {
+                      post.thumbnail = prop.url
+                    }
                   }
                 }
                 break
               case 'files':
-                if (prop.files && prop.files.length > 0) {
+                  if (prop.files && prop.files.length > 0) {
                   if (key === 'Thumbnail' || key === 'thumbnail') {
-                    post.thumbnail = prop.files[0].file?.url || prop.files[0].external?.url
+                    const src = prop.files[0].file?.url || prop.files[0].external?.url
+                    try {
+                      post.thumbnail = src ? customMapImageUrl(src) : src
+                    } catch (e) {
+                      post.thumbnail = src
+                    }
                   }
                 }
                 break
@@ -148,8 +183,10 @@ export const getPosts = async (): Promise<TPosts> => {
 
       console.log(`✅ Filtered to ${publicPosts.length} public posts`)
 
-      // Cache the successful result
-      notionCache.set(cacheKey, publicPosts)
+      // Cache the successful result (unless bypass requested)
+      if (!bypass) {
+        notionCache.set(cacheKey, publicPosts)
+      }
 
       return publicPosts
 

@@ -73,7 +73,13 @@ const CONFIG = {
     },
   },
   isProd: process.env.VERCEL_ENV === "production", // distinguish between development and production environment (ref: https://vercel.com/docs/environment-variables#system-environment-variables)
-  revalidateTime: 21600 * 7, // revalidate time for [slug], index
+  // revalidate time (in seconds) for ISR on pages like [slug] and index.
+  // Can be configured via environment variable REVALIDATE_HOURS (e.g., 6 or 12).
+  revalidateTime: (function () {
+    const hours = parseInt(process.env.REVALIDATE_HOURS || process.env.NEXT_PUBLIC_REVALIDATE_HOURS || '6', 10)
+    if (Number.isNaN(hours) || hours <= 0) return 6 * 3600
+    return hours * 3600
+  })(),
 }
 
 module.exports = { CONFIG }

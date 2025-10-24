@@ -23,6 +23,18 @@ export default async function handler(
         res.revalidate(`/${row.slug}`)
       )
       await Promise.all(revalidateRequests)
+      // Attempt to warm the sitemap CDN cache by requesting /sitemap.xml from
+      // the current host. This ensures the sitemap is refreshed in front of
+      // any CDN/edge caches after we've revalidated pages.
+      try {
+        const host = req.headers.host
+        const proto = (req.headers['x-forwarded-proto'] as string) || 'https'
+        const sitemapUrl = `${proto}://${host}/sitemap.xml`
+        // Use fetch to request sitemap so CDN (or reverse proxy) will update its cache
+        await fetch(sitemapUrl)
+      } catch (sitemapErr) {
+        console.error('Failed to warm sitemap cache:', sitemapErr)
+      }
     }
 
     res.json({ revalidated: true })

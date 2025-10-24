@@ -24,8 +24,18 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     changefreq: "daily",
   })
 
+  // Set CDN cache header so sitemap will be cached by the edge for revalidateTime
+  const sMax = CONFIG.revalidateTime || 6 * 3600
+  try {
+    ctx.res.setHeader('Cache-Control', `public, s-maxage=${sMax}, stale-while-revalidate=${Math.floor(sMax / 6)}`)
+  } catch {
+    // ignore when ctx.res is not available
+  }
+
   return getServerSideSitemap(ctx, fields)
 }
 
 // Default export to prevent next.js errors
-export default () => {}
+const Sitemap = () => null
+
+export default Sitemap

@@ -47,8 +47,10 @@ export const getStaticProps: GetStaticProps = async (context) => {
     const posts = await getPosts()
     console.log(`🔍 [getStaticProps] Total posts from Notion: ${posts.length}`)
     
-    const feedPosts = filterPosts(posts)
-    await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
+  // Ensure the prefetched posts used in client cache include both Posts and Papers
+  // so that navigating back to the feed preserves Paper entries.
+  const feedPosts = filterPosts(posts, { acceptStatus: ["Public"], acceptType: ["Post", "Paper"] })
+  await queryClient.prefetchQuery(queryKey.posts(), () => feedPosts)
 
     console.log(`🔍 [getStaticProps] Filtering posts with detail filter:`, filter)
     const detailPosts = filterPosts(posts, filter)

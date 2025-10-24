@@ -11,7 +11,8 @@ export const getPostBySlug = async (slug: string): Promise<TPost | null> => {
   }
   
   // Get all posts and find the one with matching slug
-  const posts = await getPosts()
+  // Force a fresh fetch to avoid returning stale cached posts when searching by slug
+  const posts = await getPosts({ bypassCache: true })
   
   // Search for post with matching slug
   const post = posts.find(p => p.slug === slug)

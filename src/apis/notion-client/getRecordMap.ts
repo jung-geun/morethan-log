@@ -2,22 +2,119 @@ import { ExtendedRecordMap } from "notion-types"
 import { getOfficialNotionClient } from "./notionClient"
 
 /**
+ * Convert Notion presigned URLs to our proxy URLs to prevent expiration
+ * This ensures images remain accessible even after the original signed URL expires
+ */
+function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedRecordMap {
+  // Process all blocks to find and convert image URLs
+  Object.entries(recordMap.block).forEach(([blockId, blockData]) => {
+    const block = blockData.value
+    
+    // Handle image blocks
+    if (block.type === 'image' && block.properties?.source) {
+      const sources = block.properties.source
+      if (Array.isArray(sources) && sources.length > 0) {
+        sources.forEach((source, index) => {
+          if (Array.isArray(source) && source.length > 0) {
+            const url = source[0]
+            if (typeof url === 'string' && shouldProxyUrl(url)) {
+              source[0] = `/api/image-proxy?url=${encodeURIComponent(url)}`
+            }
+          }
+        })
+      }
+    }
+    
+    // Handle cover images
+    if (block.format?.page_cover) {
+      const coverUrl = block.format.page_cover
+      if (typeof coverUrl === 'string' && shouldProxyUrl(coverUrl)) {
+        block.format.page_cover = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
+      }
+    }
+    
+    // Handle page icons (if they're images)
+    if (block.format?.page_icon) {
+      const iconUrl = block.format.page_icon
+      if (typeof iconUrl === 'string' && shouldProxyUrl(iconUrl)) {
+        block.format.page_icon = `/api/image-proxy?url=${encodeURIComponent(iconUrl)}`
+      }
+    }
+    
+    // Handle block decorations (inline images)
+    if (block.properties) {
+      Object.values(block.properties).forEach((prop: any) => {
+        if (Array.isArray(prop)) {
+          prop.forEach((item: any) => {
+            if (Array.isArray(item) && item.length > 0) {
+              const maybeUrl = item[0]
+              if (typeof maybeUrl === 'string' && shouldProxyUrl(maybeUrl)) {
+                item[0] = `/api/image-proxy?url=${encodeURIComponent(maybeUrl)}`
+              }
+            }
+          })
+        }
+      })
+    }
+  })
+  
+  return recordMap
+}
+
+/**
+ * Check if a URL should be proxied (S3 presigned URLs)
+ */
+function shouldProxyUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false
+  
+  // Proxy S3 presigned URLs
+  if (url.includes('amazonaws.com') && url.includes('X-Amz-Signature')) {
+    return true
+  }
+  
+  // Proxy Notion's prod-files-secure URLs
+  if (url.startsWith('https://prod-files-secure.s3.us-west-2.amazonaws.com')) {
+    return true
+  }
+  
+  return false
+}
+
+
+/**
  * Recursively fetch child blocks
  */
 async function fetchChildBlocks(blockId: string, notion: any, recordMap: ExtendedRecordMap): Promise<string[]> {
   try {
-    const children = await notion.blocks.children.list({
-      block_id: blockId,
-      page_size: 100,
-    })
-    
     const childIds: string[] = []
-    
-    for (const block of children.results) {
-      childIds.push(block.id)
-      await processBlock(block, blockId, notion, recordMap)
-    }
-    
+
+    // Notion children.list is paginated. Iterate through pages
+    let cursor: string | undefined = undefined
+    let fetched = 0
+    const MAX_FETCH = 5000 // safety cap to avoid runaway fetching
+
+    do {
+      const resp: any = await notion.blocks.children.list({
+        block_id: blockId,
+        page_size: 100,
+        start_cursor: cursor,
+      })
+
+      for (const block of resp.results) {
+        childIds.push(block.id)
+        // process each block (this may in turn fetch deeper children)
+        await processBlock(block, blockId, notion, recordMap)
+      }
+
+      fetched += resp.results.length
+      if (fetched >= MAX_FETCH) {
+        console.warn(`Reached max child fetch limit for block ${blockId} (${MAX_FETCH}), stopping pagination`)
+        break
+      }
+
+      cursor = resp.has_more ? resp.next_cursor : undefined
+    } while (cursor)
+
     return childIds
   } catch (error) {
     console.error(`Failed to fetch children for block ${blockId}:`, error)
@@ -276,11 +373,20 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
       const page = await notion.pages.retrieve({ page_id: pageId })
       
       // Get page blocks (content)
-      const blocks = await notion.blocks.children.list({
-        block_id: pageId,
-        page_size: 100,
-      })
-      
+      // Fetch all top-level blocks for the page (paginated)
+      const allBlocks: any[] = []
+      let topCursor: string | undefined = undefined
+      do {
+        const pageResp: any = await notion.blocks.children.list({
+          block_id: pageId,
+          page_size: 100,
+          start_cursor: topCursor,
+        })
+        allBlocks.push(...pageResp.results)
+        topCursor = pageResp.has_more ? pageResp.next_cursor : undefined
+      } while (topCursor)
+
+      const blocks = { results: allBlocks }
       console.log(`✅ Retrieved page ${pageId} with ${blocks.results.length} blocks`)
       
       // Transform to ExtendedRecordMap format for react-notion-x compatibility
@@ -315,7 +421,14 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
         await processBlock(block, pageId, notion, recordMap)
       }
       
-      return recordMap
+      // Convert all presigned URLs to proxy URLs to prevent expiration
+      const finalRecordMap = convertPresignedUrlsToProxy(recordMap)
+      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔄 [getRecordMap] Converted presigned URLs to proxy URLs')
+      }
+      
+      return finalRecordMap
       
     } catch (error: any) {
       retryCount++
