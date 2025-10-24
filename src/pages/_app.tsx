@@ -4,6 +4,7 @@ import { RootLayout } from "src/layouts"
 import { queryClient } from "src/libs/react-query"
 import { Analytics } from "@vercel/analytics/next"
 import GoogleAnalytics from "src/components/GoogleAnalytics"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 // Disable console.log in production
 if (process.env.NODE_ENV === 'production') {
@@ -19,6 +20,7 @@ function App({ Component, pageProps }: AppPropsWithLayout) {
         <RootLayout>{getLayout(<Component {...pageProps} />)}</RootLayout>
         <GoogleAnalytics />
         <Analytics />
+        <SpeedInsights />
       </Hydrate>
     </QueryClientProvider>
   )
