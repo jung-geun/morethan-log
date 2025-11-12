@@ -1,12 +1,38 @@
-# morethan-log
+# MoreThanLog (Enhanced Fork)
+
+> **Note**: This is an enhanced fork of the original [morethan-log](https://github.com/morethanmin/morethan-log) project. We deeply appreciate the original creator's work and are building upon their excellent foundation.
 
 <img width="1715" alt="image" src="https://user-images.githubusercontent.com/72514247/209824600-ca9c8acc-6d2d-4041-9931-43e34b8a9a5f.png">
 
-Next.js static blog using Notion as a Content Management System (CMS). Supports both Blog format Post as well as Page format for Resume. Deployed using Vercel.
+Next.js static blog using Notion as a Content Management System (CMS). This enhanced version extends the original with advanced Notion integration, automated updates, and additional features while maintaining full compatibility with the original project's capabilities.
+
+**Original Project**: [morethan-log](https://github.com/morethanmin/morethan-log) by [morethanmin](https://github.com/morethanmin)
 
 [Demo Blog](https://morethan-log.vercel.app) | [Demo Resume](https://morethan-log.vercel.app/resume)
 
-## Features
+## 🚀 Enhanced Features
+
+### 🔧 Advanced Notion Integration
+- **Rich Notion Blocks**: Full support for Notion's advanced blocks including databases, toggles, callouts, and more
+- **Enhanced Media Handling**: Improved image proxy and media content processing
+- **Custom Components**: Extended rendering for Notion-specific features
+
+### ⚡ Automated Updates & Performance
+- **Automated ISR Revalidation**: GitHub Actions workflow for periodic content updates
+- **Optimized Caching**: Enhanced caching strategies for better performance
+- **Error Handling**: Robust error handling and fallback mechanisms
+
+### 🛠️ Development & Testing
+- **Comprehensive Testing**: Jest test suite with coverage reporting
+- **CI/CD Pipeline**: Automated testing and deployment workflows
+- **Code Quality**: ESLint, Prettier, and TypeScript strict mode
+
+### 🎨 Enhanced UI/UX
+- **Improved Theme System**: Better dark/light mode transitions
+- **Mobile Optimization**: Enhanced responsive design
+- **Accessibility**: Improved ARIA labels and keyboard navigation
+
+## Original Features
 
 **📒 Writing posts using notion**
 
