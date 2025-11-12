@@ -419,3 +419,31 @@ npm run lint
 - **에러 핸들링 테스트**: 잘못된 URL 형식 및 예외 상황 처리
 
 테스트는 `tests/` 디렉토리에 위치하며, 실제 프로덕션 코드와 동일한 로직을 검증하여 안정성을 보장합니다.
+
+## 의존성 관리 및 문제 해결
+
+### React 18 호환성 문제 해결
+프로젝트가 React 18.2.0을 사용하면서 발생한 의존성 충돌 문제를 해결했습니다:
+
+#### 문제 상황
+- `react-cusdis@2.1.3`가 React 17.0.0을 요구하는 peer dependency 충돌
+- npm install 시 "Could not resolve dependency: peer react@"^17.0.0" from react-cusdis@2.1.3" 에러 발생
+
+#### 해결 방안
+1. **react-cusdis 의존성 제거**: `package.json`에서 react-cusdis 제거
+2. **커스텀 Cusdis 컴포넌트 구현**: 
+   - 네이티브 Cusdis 스크립트 직접 로드
+   - React 18과 완전 호환되는 커스텀 구현
+   - 기존 기능(테마 스위칭, 재렌더링) 모두 유지
+
+#### 변경된 파일
+- `package.json`: react-cusdis 의존성 제거
+- `src/routes/Detail/PostDetail/CommentBox/Cusdis.tsx`: 네이티브 스크립트 사용하는 커스텀 구현으로 교체
+
+#### 결과
+- ✅ npm install 성공
+- ✅ 모든 테스트 통과 (13/13)
+- ✅ 프로덕션 빌드 성공
+- ✅ 기존 Cusdis 댓글 기능 완전 유지
+
+이 해결을 통해 프로젝트는 React 18의 최신 기능을 활용하면서 안정적인 의존성 관리가 가능해졌습니다.
