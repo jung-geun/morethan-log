@@ -12,7 +12,11 @@
     "build": "next build",
     "start": "next start",
     "postbuild": "next-sitemap --config next-sitemap.config.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
@@ -38,18 +42,25 @@
     "react-notion-x": "^6.16.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/gtag.js": "^0.0.12",
+    "@types/jest": "^30.0.0",
     "@types/node": "^18.11.15",
     "@types/react": "^18.0.26",
     "@types/react-dom": "^18.0.9",
     "autoprefixer": "^10.4.0",
     "eslint": "^8.39.0",
     "eslint-config-next": "^13.4.7",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
     "next-sitemap": "^3.1.32",
     "postcss": "^8.3.11",
     "prettier": "^2.7.1",
     "prismjs": "^1.29.0",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.4",
+    "whatwg-fetch": "^3.6.20"
   }
 }
