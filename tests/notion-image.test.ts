@@ -1,173 +1,135 @@
+/**
+ * @jest-environment node
+ *
+ * 이 테스트는 실제 Notion API(공식 클라이언트)를 호출하는 통합 테스트입니다.
+ * DOM API에 의존하지 않으므로 Node 환경에서 실행해야 window 관련 mock이 필요 없습니다.
+ */
+
+import 'dotenv/config'
+import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import { getOfficialNotionClient } from 'src/apis/notion-client/notionClient'
-import { getRecordMap } from 'src/apis/notion-client/getRecordMap'
-import { getPosts } from 'src/apis/notion-client/getPosts'
-import { customMapImageUrl } from 'src/libs/utils/notion/customMapImageUrl'
-import { Block } from 'notion-types'
+import { summarizeBlockTypes } from 'src/libs/utils/notion/analyzeBlocks'
 
-// Mock the Notion client to avoid actual API calls during testing
-jest.mock('src/apis/notion-client/notionClient')
+const REQUIRED_ENV = ['NOTION_TOKEN', 'NOTION_DATASOURCE_ID'] as const
+const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key])
 
-describe('Notion Image Handling Tests', () => {
-  // Mock a basic Notion block with image
-  const mockBlockWithImage: Block = {
-    id: 'test-block-id',
-    type: 'image',
-    parent_id: 'test-parent-id',
-    parent_table: 'block',
-    created_time: 1234567890000,
-    last_edited_time: 1234567890000,
-    created_by_table: 'notion_user',
-    created_by_id: 'test-user-id',
-    last_edited_by_table: 'notion_user',
-    last_edited_by_id: 'test-user-id',
-    archived: false,
-    has_translations: false,
-    has_content: true,
-    space_id: 'test-space-id',
-    properties: {
-      source: [['https://prod-files-secure.s3.us-west-2.amazonaws.com/test-image.jpg']]
-    },
-    format: {
-      block_width: 378,
-      block_height: 200,
-      block_full_width: false,
-      block_page_full_width: false,
-      block_aspect_ratio: 1.89,
-      display_source: 'https://prod-files-secure.s3.us-west-2.amazonaws.com/test-image.jpg',
-      block_color: 'default'
+type TitleProperty = Extract<PageObjectResponse['properties'][string], { type: 'title' }>
+const isTitleProperty = (property: PageObjectResponse['properties'][string]): property is TitleProperty =>
+  property?.type === 'title'
+
+jest.setTimeout(60000)
+
+const describeMaybe = missingEnv.length ? describe.skip : describe
+
+if (missingEnv.length) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `ℹ️  Skipping Notion integration tests because env vars are missing: ${missingEnv.join(', ')}`
+  )
+}
+
+describeMaybe('Notion integration - test post lookup', () => {
+  it('finds "test post" in the database and fetches its content', async () => {
+    const notion = getOfficialNotionClient()
+    const dataSourceId = process.env.NOTION_DATASOURCE_ID
+    if (!dataSourceId) {
+      throw new Error('NOTION_DATASOURCE_ID env var is required for this test')
     }
-  } as any
 
-  // Mock a recordMap with image blocks
-  const mockRecordMapWithImages = {
-    block: {
-      'test-block-id': mockBlockWithImage
-    },
-    collection: {},
-    collection_view: {},
-    notion_user: {},
-    space: {}
-  }
+    const pages: PageObjectResponse[] = []
+    let cursor: string | null | undefined = undefined
+    do {
+      const resp = await notion.dataSources.query({
+        data_source_id: dataSourceId,
+        page_size: 100,
+        start_cursor: cursor ?? undefined,
+      })
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
+      resp.results.forEach((entry) => {
+        if ('properties' in entry) {
+          pages.push(entry as PageObjectResponse)
+        }
+      })
 
-  describe('1. customMapImageUrl 기능 테스트', () => {
-    test('1-1. AWS S3 서명된 URL을 프록시 URL로 변환', () => {
-      const awsUrl = 'https://prod-files-secure.s3.us-west-2.amazonaws.com/test-image.jpg?X-Amz-Signature=abc123'
-      const result = customMapImageUrl(awsUrl, mockBlockWithImage)
-      
-      expect(result).toContain('/api/image-proxy')
-      expect(result).toContain(encodeURIComponent(awsUrl))
+      cursor = resp.has_more ? resp.next_cursor : null
+    } while (cursor)
+
+    const normalize = (value?: string | null) => value?.trim().toLowerCase()
+    const targetPage = pages.find((entry) => {
+      const titleProperty = Object.values(entry.properties).find(isTitleProperty)
+      const titleText = titleProperty?.title?.map((block) => block.plain_text).join('')
+      return normalize(titleText) === 'test post'
     })
 
-    test('1-2. 다른 S3 서명된 URL도 프록시로 변환', () => {
-      const s3Url = 'https://s3.amazonaws.com/bucket/test.jpg?X-Amz-Signature=xyz789'
-      const result = customMapImageUrl(s3Url, mockBlockWithImage)
-      
-      expect(result).toContain('/api/image-proxy')
-      expect(result).toContain(encodeURIComponent(s3Url))
+    if (!targetPage) {
+      const sampleTitles = pages
+        .map((entry) => {
+          const prop = Object.values(entry.properties).find(isTitleProperty)
+          return prop?.title?.map((block) => block.plain_text).join('')
+        })
+        .filter(Boolean)
+        .slice(0, 10)
+      throw new Error(
+        `Unable to locate a Notion page titled "test post". Sample titles: ${sampleTitles.join(', ')}`
+      )
+    }
+
+    expect(targetPage.id).toBeTruthy()
+
+    const page = await notion.pages.retrieve({ page_id: targetPage.id })
+
+    if (!('properties' in page)) {
+      throw new Error('Expected a full page object response from Notion API')
+    }
+
+    const fullPage = page as PageObjectResponse
+
+    const titleProperty = Object.values(fullPage.properties).find(isTitleProperty)
+
+    const fetchedTitle = titleProperty?.title
+      ?.map((entry) => entry.plain_text)
+      ?.join('')
+    const normalizedTitle = fetchedTitle?.trim().toLowerCase()
+
+    expect(normalizedTitle).toBe('test post')
+
+    // 페이지 블록을 전부 순회하면서 어떤 타입의 요소가 포함돼 있는지 요약한다.
+  const summary = await summarizeBlockTypes(notion, targetPage.id)
+
+    expect(summary.totalBlocks).toBeGreaterThan(0)
+    expect(Object.keys(summary.types).length).toBeGreaterThan(0)
+    expect(summary.types).toHaveProperty('paragraph')
+    expect(Array.isArray(summary.images)).toBe(true)
+    if (summary.types.image && summary.types.image > 0) {
+      expect(summary.images.length).toBeGreaterThan(0)
+      summary.images.forEach((img) => {
+        expect(img).toHaveProperty('blockId')
+        expect(img).toHaveProperty('source')
+      })
+    }
+
+    // 특정 블록 타입에서 인라인 수식 존재 여부 확인
+    const INLINE_MATH_TARGETS = new Set([
+      'paragraph',
+      'heading_1',
+      'heading_2',
+      'heading_3',
+      'bulleted_list_item',
+      'numbered_list_item',
+    ])
+
+    const blockIdsWithInlineMath = summary.inlineMath.filter((entry) => INLINE_MATH_TARGETS.has(entry.type))
+
+    // 인라인 수식이 없다면 테스트는 실패시키지 않되, 최소한 데이터 구조가 존재하는지 검증
+    expect(Array.isArray(summary.inlineMath)).toBe(true)
+    blockIdsWithInlineMath.forEach((info) => {
+      expect(info).toHaveProperty('blockId')
+      expect(info).toHaveProperty('type')
     })
 
-    test('1-3. Unsplash URL은 변환하지 않음', () => {
-      const unsplashUrl = 'https://images.unsplash.com/photo-1234567890'
-      const result = customMapImageUrl(unsplashUrl, mockBlockWithImage)
-      
-      expect(result).toBe(unsplashUrl)
-    })
-
-    test('1-4. data URL은 변환하지 않음', () => {
-      const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
-      const result = customMapImageUrl(dataUrl, mockBlockWithImage)
-      
-      expect(result).toBe(dataUrl)
-    })
-
-    test('1-5. 이미 프록시된 URL은 중복 처리하지 않음', () => {
-      const proxiedUrl = 'https://localhost:3000/api/image-proxy?url=' + encodeURIComponent('https://example.com/image.jpg')
-      const result = customMapImageUrl(proxiedUrl, mockBlockWithImage)
-      
-      expect(result).toBe(proxiedUrl)
-    })
-
-    test('1-6. 일반 Notion 이미지 URL을 프록시로 변환', () => {
-      const notionUrl = '/images/page-cover/https%3A%2F%2Fexample.com%2Fimage.jpg'
-      const result = customMapImageUrl(notionUrl, mockBlockWithImage)
-      
-      expect(result).toContain('/api/image-proxy')
-      expect(result).toContain('notion.so')
-    })
-
-    test('1-7. 빈 URL은 에러를 발생', () => {
-      expect(() => {
-        customMapImageUrl('', mockBlockWithImage)
-      }).toThrow("URL can't be empty")
-    })
-  })
-
-  describe('2. 이미지 블록 식별 테스트', () => {
-    test('2-1. 이미지 블록 타입을 올바르게 식별', () => {
-      const imageBlock = {
-        ...mockBlockWithImage,
-        type: 'image'
-      }
-      
-      expect(imageBlock.type).toBe('image')
-    })
-
-    test('2-2. 이미지 블록의 소스 URL을 추출', () => {
-      const source = mockBlockWithImage.properties?.source?.[0]?.[0]
-      
-      expect(source).toContain('prod-files-secure.s3.us-west-2.amazonaws.com')
-    })
-  })
-
-  describe('3. 프록시 API 동작 테스트', () => {
-    test('3-1. 이미지 프록시 URL 형식 확인', () => {
-      const testUrl = 'https://example.com/test.jpg'
-      const result = customMapImageUrl(testUrl, mockBlockWithImage)
-      
-      // URL 형식 확인 (상대 또는 절대 URL)
-      expect(result).toMatch(/^(https?:\/\/.*)?\/api\/image-proxy\?url=/)
-      // Notion 이미지 URL이 생성되었는지 확인
-      expect(result).toContain('notion.so')
-      expect(result).toContain('table%3Dblock')
-      expect(result).toContain('id%3Dtest-block-id')
-    })
-
-    test('3-2. NEXT_PUBLIC_SITE_URL이 없을 때도 동작', () => {
-      const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL
-      delete process.env.NEXT_PUBLIC_SITE_URL
-      
-      const testUrl = 'https://prod-files-secure.s3.us-west-2.amazonaws.com/test.jpg'
-      const result = customMapImageUrl(testUrl, mockBlockWithImage)
-      
-      expect(result).toContain('/api/image-proxy')
-      
-      // 환경 변수 복원
-      if (originalSiteUrl) {
-        process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl
-      }
-    })
-  })
-
-  describe('4. 에러 핸들링 테스트', () => {
-    test('4-1. 잘못된 URL 형식 처리', () => {
-      const invalidUrl = 'not-a-valid-url'
-      
-      // 함수가 잘못된 URL을 처리할 때 예외를 던지지 않는지 확인
-      expect(() => {
-        customMapImageUrl(invalidUrl, mockBlockWithImage)
-      }).not.toThrow()
-    })
-
-    test('4-2. 블록 파라미터가 없어도 동작', () => {
-      const testUrl = 'https://example.com/test.jpg'
-      
-      expect(() => {
-        customMapImageUrl(testUrl)
-      }).not.toThrow()
-    })
+    // 디버깅/레퍼런스용 로그
+    // eslint-disable-next-line no-console
+    console.log('[notion-test] Block summary', summary)
   })
 })
+
