@@ -1,7 +1,131 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import * as fs from 'fs'
-import * as path from 'path'
 import { errorLog } from 'src/libs/utils/logger'
+import {
+  ImageProxyMetadata,
+  maskPresignedUrl,
+  unwrapProxiedUrl,
+} from 'src/libs/utils/image/proxyUtils'
+import {
+  appendJsonLog,
+  getRequestIp,
+  resolveLogFile,
+} from 'src/libs/utils/image/proxyServer'
+import { getOfficialNotionClient } from 'src/apis/notion-client/notionClient'
+
+const REFRESHABLE_STATUS = new Set([401, 403, 404, 410])
+
+const firstQueryValue = (value: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(value)) {
+    return value.find((v) => typeof v === 'string' && v.length > 0)
+  }
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+const parseProxyMetadata = (req: NextApiRequest): ImageProxyMetadata => {
+  return {
+    pageId: firstQueryValue(req.query.pageId as string | string[] | undefined),
+    blockId: firstQueryValue(req.query.blockId as string | string[] | undefined),
+    property: firstQueryValue(req.query.property as string | string[] | undefined),
+    propertyType: firstQueryValue(req.query.propertyType as string | string[] | undefined),
+    source: firstQueryValue(req.query.source as string | string[] | undefined),
+  }
+}
+
+const shouldAttemptRefresh = (status?: number, metadata?: ImageProxyMetadata) => {
+  if (!metadata) return false
+  if (!metadata.blockId && !metadata.pageId) return false
+  if (!status) return true
+  return REFRESHABLE_STATUS.has(status)
+}
+
+const extractUrlFromFileValue = (value: any): string | null => {
+  if (!value) return null
+  if (value.type === 'file') {
+    return value.file?.url ?? null
+  }
+  if (value.type === 'external') {
+    return value.external?.url ?? null
+  }
+  return null
+}
+
+const extractUrlFromBlock = (block: any): string | null => {
+  if (!block || typeof block !== 'object') return null
+  const type = block.type
+  if (!type) return null
+  const typeValue = (block as any)[type]
+  if (!typeValue) return null
+  return extractUrlFromFileValue(typeValue)
+}
+
+const extractUrlFromProperty = (property: any, declaredType?: string): string | null => {
+  if (!property || typeof property !== 'object') return null
+  const propType = declaredType || property.type
+
+  if (propType === 'files' || propType === 'file') {
+    const files: any[] | undefined = property.files
+    if (Array.isArray(files) && files.length > 0) {
+      return extractUrlFromFileValue(files[0])
+    }
+  }
+
+  if (propType === 'url' && typeof property.url === 'string') {
+    return property.url
+  }
+
+  return null
+}
+
+const extractUrlFromCover = (cover: any): string | null => {
+  if (!cover) return null
+  return extractUrlFromFileValue(cover)
+}
+
+const refreshImageUrlFromNotion = async (metadata: ImageProxyMetadata) => {
+  if (!metadata.blockId && !metadata.pageId) {
+    return { url: null, via: undefined as string | undefined }
+  }
+
+  try {
+    const notion = getOfficialNotionClient()
+
+    if (metadata.blockId) {
+      try {
+        const block = await notion.blocks.retrieve({ block_id: metadata.blockId })
+        const refreshed = extractUrlFromBlock(block)
+        if (refreshed) {
+          return { url: refreshed, via: 'block' }
+        }
+      } catch (err) {
+        console.log('[image-proxy] refresh via block failed', metadata.blockId, err instanceof Error ? err.message : err)
+      }
+    }
+
+    if (metadata.pageId) {
+      try {
+        const page = await notion.pages.retrieve({ page_id: metadata.pageId })
+        if (metadata.property) {
+          const property = (page as any)?.properties?.[metadata.property]
+          const refreshed = extractUrlFromProperty(property, metadata.propertyType)
+          if (refreshed) {
+            return { url: refreshed, via: 'page-property' }
+          }
+        }
+
+        const coverUrl = extractUrlFromCover((page as any)?.cover)
+        if (coverUrl) {
+          return { url: coverUrl, via: 'page-cover' }
+        }
+      } catch (err) {
+        console.log('[image-proxy] refresh via page failed', metadata.pageId, err instanceof Error ? err.message : err)
+      }
+    }
+  } catch (err) {
+    console.log('[image-proxy] refresh initialization failed', err instanceof Error ? err.message : err)
+  }
+
+  return { url: null, via: undefined as string | undefined }
+}
 
 /**
  * Image proxy API to handle Notion's expiring signed URLs
@@ -23,87 +147,7 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing or invalid URL parameter' })
   }
 
-  // Unwrap nested/encoded proxy URLs. Some images may already have been
-  // proxied (e.g. /api/image-proxy?url=%2Fapi%2Fimage-proxy%3Furl%3Dhttps%3A...) so
-  // we iteratively decode and extract the innermost `url=` value until we
-  // recover an absolute http(s) URL. Includes safeguards (max iterations)
-  // and diagnostic logs to help with debugging nested encodings.
-  const unwrapUrl = (input: string) => {
-    let cur = String(input)
-    const maxRounds = 12
-
-    for (let round = 0; round < maxRounds; round++) {
-      // If we already have an absolute URL, stop
-      if (/^https?:\/\//i.test(cur)) {
-        console.log(`[image-proxy] unwrap: got absolute url at round ${round}`)
-        break
-      }
-
-      // Normalize plus signs (common in query strings as spaces)
-      const plusNormalized = cur.replace(/\+/g, ' ')
-
-      // Try to decode; if decodeURIComponent fails, stop further decoding
-      let decoded: string
-      try {
-        decoded = decodeURIComponent(plusNormalized)
-      } catch (e) {
-        // If decoding throws, keep the current string and stop iterating
-        console.log('[image-proxy] unwrap: decodeURIComponent failed at round', round, e && (e as Error).message)
-        break
-      }
-
-      // If decoded contains a nested proxy with ?url= (possibly multiple levels),
-      // extract the last occurrence (unwrap from the inside-out)
-      const lastQuestionUrl = decoded.lastIndexOf('?url=')
-      const lastAmpUrl = decoded.lastIndexOf('&url=')
-      const lastUrlIndex = Math.max(lastQuestionUrl, lastAmpUrl)
-      if (lastUrlIndex !== -1) {
-        const candidate = decoded.substring(lastUrlIndex + 5)
-        if (candidate && candidate !== cur) {
-          cur = candidate
-          console.log('[image-proxy] unwrap: extracted after last url= at round', round)
-          continue
-        }
-      }
-
-      // If decoded includes /api/image-proxy and a first ?url=, try extracting after that
-      const proxyIndex = decoded.indexOf('/api/image-proxy')
-      const firstUrlParam = decoded.indexOf('?url=')
-      if (proxyIndex !== -1 && firstUrlParam !== -1) {
-        const candidate = decoded.substring(firstUrlParam + 5)
-        if (candidate && candidate !== cur) {
-          cur = candidate
-          console.log('[image-proxy] unwrap: extracted after first ?url= at round', round)
-          continue
-        }
-      }
-
-      // If decode made progress (different string), continue to next round
-      if (decoded !== cur) {
-        cur = decoded
-        console.log('[image-proxy] unwrap: decoding progressed at round', round)
-        continue
-      }
-
-      // No progress made; stop
-      break
-    }
-
-    // As a final attempt, repeatedly decode until we either get an http(s) URL
-    // or reach a small iteration bound.
-    for (let i = 0; i < 6 && !/^https?:\/\//i.test(cur); i++) {
-      try {
-        cur = decodeURIComponent(cur)
-        if (/^https?:\/\//i.test(cur)) break
-      } catch (e) {
-        break
-      }
-    }
-
-    return cur
-  }
-
-  const finalUrl = unwrapUrl(url)
+  const finalUrl = unwrapProxiedUrl(url, true)
   console.log('[image-proxy] received url=', url)
   console.log('[image-proxy] finalUrl=', finalUrl)
 
@@ -128,6 +172,11 @@ export default async function handler(
   }
 
   console.log('[image-proxy] resolvedUrl=', resolvedUrl)
+
+  const metadata = parseProxyMetadata(req)
+  if (metadata.blockId || metadata.pageId || metadata.property) {
+    console.log('[image-proxy] metadata=', metadata)
+  }
 
   // Heuristic: if the resolved URL looks like a partial presigned S3 URL
   // (for example it contains X-Amz-Algorithm but is missing X-Amz-Signature),
@@ -178,73 +227,89 @@ export default async function handler(
     return res.status(403).json({ error: 'URL not allowed' })
   }
 
+  const refreshDiagnostics: { attempted: boolean; success: boolean; via?: string } = {
+    attempted: false,
+    success: false,
+  }
+
   try {
     // Fetch the image from Notion with retry logic
-    let imageResponse
-    let lastError
+    let imageResponse: Response | undefined
+    let lastError: unknown
+    let currentUrl = resolvedUrl
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const maxAttempts = 3
+    let attempt = 1
+
+    while (attempt <= maxAttempts) {
       try {
-  imageResponse = await fetch(resolvedUrl, {
+        imageResponse = await fetch(currentUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; NotionImageProxy/1.0)',
           },
         })
-
-        if (imageResponse.ok) {
-          break
-        }
-
-        lastError = new Error(`HTTP ${imageResponse.status}`)
-        
-        if (attempt < 3) {
-          // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100))
-        }
       } catch (err) {
         lastError = err
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100))
+        imageResponse = undefined
+      }
+
+      if (imageResponse && imageResponse.ok) {
+        resolvedUrl = currentUrl
+        break
+      }
+
+      const status = imageResponse?.status
+      if (!refreshDiagnostics.attempted && shouldAttemptRefresh(status, metadata)) {
+        refreshDiagnostics.attempted = true
+        const refreshed = await refreshImageUrlFromNotion(metadata)
+        if (refreshed.url && refreshed.url !== currentUrl) {
+          refreshDiagnostics.success = true
+          refreshDiagnostics.via = refreshed.via
+          currentUrl = refreshed.url
+          resolvedUrl = refreshed.url
+          lastError = undefined
+          console.log('[image-proxy] refreshed image URL from Notion', {
+            via: refreshed.via,
+            blockId: metadata.blockId,
+            pageId: metadata.pageId,
+            property: metadata.property,
+          })
+          continue
         }
       }
+
+      if (imageResponse && !imageResponse.ok) {
+        lastError = new Error(`HTTP ${imageResponse.status}`)
+      }
+
+      if (attempt >= maxAttempts) {
+        break
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 100))
+      attempt += 1
     }
 
     if (!imageResponse || !imageResponse.ok) {
       const err = lastError || new Error('Failed to fetch image')
       // Record error to disk for later inspection
       try {
-        const logDir = path.resolve(process.cwd(), 'logs')
-        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
-        const logFile = path.join(logDir, 'image-proxy-errors.jsonl')
-        // Masking helper for sensitive query params
-        const maskPresigned = (urlStr: any) => {
-          try {
-            const u = new URL(String(urlStr))
-            for (const key of Array.from(u.searchParams.keys())) {
-              if (/^X-Amz-/i.test(key) || /signature|token|credential/i.test(key)) {
-                u.searchParams.set(key, '[redacted]')
-              }
-            }
-            return u.toString()
-          } catch (e) {
-            try {
-              return String(urlStr).slice(0, 2000)
-            } catch { return '' }
-          }
-        }
+        const logFile = resolveLogFile('image-proxy-errors.jsonl')
         const record = {
           timestamp: new Date().toISOString(),
-          ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+          ip: getRequestIp(req),
           receivedUrl: String(url).slice(0, 2000),
           rawRequestUrl: String(req.url).slice(0, 2000),
           finalUrl: finalUrl?.slice ? finalUrl.slice(0, 2000) : finalUrl,
           resolvedUrl: resolvedUrl?.slice ? resolvedUrl.slice(0, 2000) : resolvedUrl,
-          maskedResolvedUrl: maskPresigned(resolvedUrl),
+          maskedResolvedUrl: maskPresignedUrl(resolvedUrl),
           status: imageResponse ? imageResponse.status : null,
           message: err instanceof Error ? err.message : String(err),
           userAgent: req.headers['user-agent'],
+          metadata,
+          refresh: refreshDiagnostics,
         }
-        fs.appendFileSync(logFile, JSON.stringify(record) + '\n')
+        appendJsonLog(logFile, record)
       } catch (fsErr) {
         errorLog('[image-proxy] failed to write error log', fsErr)
       }
@@ -270,38 +335,22 @@ export default async function handler(
 
     // Write a persistent record for production debugging
     try {
-      const logDir = path.resolve(process.cwd(), 'logs')
-      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
-      const logFile = path.join(logDir, 'image-proxy-errors.jsonl')
-      const maskPresigned = (urlStr: any) => {
-        try {
-          const u = new URL(String(urlStr))
-          for (const key of Array.from(u.searchParams.keys())) {
-            if (/^X-Amz-/i.test(key) || /signature|token|credential/i.test(key)) {
-              u.searchParams.set(key, '[redacted]')
-            }
-          }
-          return u.toString()
-        } catch (e) {
-          try {
-            return String(urlStr).slice(0, 2000)
-          } catch { return '' }
-        }
-      }
-
+      const logFile = resolveLogFile('image-proxy-errors.jsonl')
       const record = {
         timestamp: new Date().toISOString(),
-        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        ip: getRequestIp(req),
         receivedUrl: String(url).slice(0, 2000),
         rawRequestUrl: String(req.url).slice(0, 2000),
         finalUrl: finalUrl?.slice ? finalUrl.slice(0, 2000) : finalUrl,
         resolvedUrl: resolvedUrl?.slice ? resolvedUrl.slice(0, 2000) : resolvedUrl,
-        maskedResolvedUrl: maskPresigned(resolvedUrl),
+        maskedResolvedUrl: maskPresignedUrl(resolvedUrl),
         message: error instanceof Error ? error.message : String(error),
         stack: error && (error as any).stack ? String((error as any).stack).slice(0, 2000) : undefined,
         userAgent: req.headers['user-agent'],
+        metadata,
+        refresh: refreshDiagnostics,
       }
-      fs.appendFileSync(logFile, JSON.stringify(record) + '\n')
+      appendJsonLog(logFile, record)
     } catch (fsErr) {
       errorLog('[image-proxy] failed to write error log', fsErr)
     }
@@ -310,25 +359,18 @@ export default async function handler(
       const slackWebhook = process.env.SLACK_WEBHOOK
       if (slackWebhook) {
         try {
-          // local masking helper (don't leak presigned tokens)
-          const maskPresignedLocal = (uStr: any) => {
-            try {
-              const uu = new URL(String(uStr))
-              for (const k of Array.from(uu.searchParams.keys())) {
-                if (/^X-Amz-/i.test(k) || /signature|token|credential/i.test(k)) {
-                  uu.searchParams.set(k, '[redacted]')
-                }
-              }
-              return uu.toString()
-            } catch (e) {
-              try { return String(uStr).slice(0, 2000) } catch { return '' }
-            }
-          }
-
           const rawRequestUrl = String(req.url).slice(0, 2000)
-          const maskedResolved = maskPresignedLocal(resolvedUrl)
+          const maskedResolved = maskPresignedUrl(resolvedUrl)
+          const metaParts: string[] = []
+          if (metadata.blockId) metaParts.push(`blockId=${metadata.blockId}`)
+          if (metadata.pageId) metaParts.push(`pageId=${metadata.pageId}`)
+          if (metadata.property) metaParts.push(`property=${metadata.property}`)
+          const metaLine = metaParts.length ? `\n• meta: ${metaParts.join(', ')}` : ''
+          const refreshLine = refreshDiagnostics.attempted
+            ? `\n• refresh: ${refreshDiagnostics.success ? `success via ${refreshDiagnostics.via}` : 'attempted but failed'}`
+            : ''
           const slackBody = {
-            text: `:warning: image-proxy failed\n• requested: ${rawRequestUrl}\n• resolved: ${maskedResolved}\n• message: ${error instanceof Error ? error.message : String(error)}`
+            text: `:warning: image-proxy failed\n• requested: ${rawRequestUrl}\n• resolved: ${maskedResolved}\n• message: ${error instanceof Error ? error.message : String(error)}${metaLine}${refreshLine}`
           }
           // fire-and-forget
           fetch(slackWebhook, {

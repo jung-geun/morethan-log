@@ -1,6 +1,16 @@
 import { Block } from 'notion-types'
+import {
+  createProxyRequestUrl,
+  ImageProxyMetadata,
+  isAlreadyProxied,
+} from 'src/libs/utils/image/proxyUtils'
 
-export const customMapImageUrl = (url: string, block?: Block): string => {
+type CustomMapContext = Omit<ImageProxyMetadata, 'blockId' | 'pageId' | 'source'> & {
+  pageId?: string
+  source?: string
+}
+
+export const customMapImageUrl = (url: string, block?: Block, context?: CustomMapContext): string => {
   // 함수 호출 여부 확인 로그
   if (process.env.NODE_ENV !== 'production') {
     console.log('🔍 [customMapImageUrl] Called with URL:', url.substring(0, 100))
@@ -14,13 +24,21 @@ export const customMapImageUrl = (url: string, block?: Block): string => {
     return url
   }
 
-  // Avoid double-wrapping: if the URL is already pointing to our proxy, return it
-  try {
-    if (url.includes('/api/image-proxy') || decodeURIComponent(url).includes('/api/image-proxy')) {
-      return url
+  if (isAlreadyProxied(url)) {
+    return url
+  }
+
+  const metadata: ImageProxyMetadata = { ...(context ?? {}) }
+
+  if (block) {
+    metadata.blockId = block.id
+    const parentId = (block as any)?.parent_id
+    if (typeof parentId === 'string' && parentId.length > 0) {
+      metadata.pageId = metadata.pageId ?? parentId
     }
-  } catch (e) {
-    // ignore decode errors and continue
+    metadata.source = metadata.source ?? 'recordMap'
+  } else if (!metadata.source && (metadata.pageId || metadata.property)) {
+    metadata.source = 'pageProperty'
   }
 
   // more recent versions of notion don't proxy unsplash images
@@ -37,9 +55,7 @@ export const customMapImageUrl = (url: string, block?: Block): string => {
     // Use our image proxy API to cache the image.
     // Return an absolute URL (helps avoid relative-path double-wrapping
     // when pages are rendered in different contexts).
-    const site = process.env.NEXT_PUBLIC_SITE_URL || ''
-    const prefix = site ? site.replace(/\/$/, '') : ''
-    return `${prefix}/api/image-proxy?url=${encodeURIComponent(url)}`
+    return createProxyRequestUrl(url, metadata)
   }
   
   // Also proxy other S3 URLs that might expire
@@ -47,9 +63,7 @@ export const customMapImageUrl = (url: string, block?: Block): string => {
     if (process.env.NODE_ENV !== 'production') {
       console.log('✅ [customMapImageUrl] Proxying S3 signed URL')
     }
-    const site = process.env.NEXT_PUBLIC_SITE_URL || ''
-    const prefix = site ? site.replace(/\/$/, '') : ''
-    return `${prefix}/api/image-proxy?url=${encodeURIComponent(url)}`
+    return createProxyRequestUrl(url, metadata)
   }
 
   try {
@@ -107,8 +121,5 @@ export const customMapImageUrl = (url: string, block?: Block): string => {
   // thumbnails (main feed + detail pages) consistently go through a single
   // caching layer. Using an absolute URL when NEXT_PUBLIC_SITE_URL is set
   // avoids issues with double-wrapping in nested rendering contexts.
-  const site = process.env.NEXT_PUBLIC_SITE_URL || ''
-  const prefix = site ? site.replace(/\/$/, '') : ''
-
-  return `${prefix}/api/image-proxy?url=${encodeURIComponent(finalUrl)}`
+  return createProxyRequestUrl(finalUrl, metadata)
 }

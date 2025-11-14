@@ -129,7 +129,12 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
                         // ignore diagnostic failures
                       }
 
-                      post.thumbnail = customMapImageUrl(prop.url)
+                      post.thumbnail = customMapImageUrl(prop.url, undefined, {
+                        pageId: page.id,
+                        property: key,
+                        propertyType: prop.type,
+                        source: 'pageProperty',
+                      })
                     } catch (e) {
                       post.thumbnail = prop.url
                     }
@@ -141,7 +146,14 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
                   if (key === 'Thumbnail' || key === 'thumbnail') {
                     const src = prop.files[0].file?.url || prop.files[0].external?.url
                     try {
-                      post.thumbnail = src ? customMapImageUrl(src) : src
+                      post.thumbnail = src
+                        ? customMapImageUrl(src, undefined, {
+                            pageId: page.id,
+                            property: key,
+                            propertyType: prop.type,
+                            source: 'pageProperty',
+                          })
+                        : src
                     } catch (e) {
                       post.thumbnail = src
                     }
