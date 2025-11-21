@@ -6,6 +6,7 @@ import useScheme from "src/hooks/useScheme"
 import { customMapImageUrl } from "src/libs/utils/notion"
 import DatabasePlaceholder from "src/components/DatabasePlaceholder"
 import { useDatabasePlaceholderEffect } from "./useDatabasePlaceholderEffect"
+import { useListItemColorEffect } from "./useListItemColorEffect"
 import { useEffect } from "react"
 
 // core styles shared by all of react-notion-x (required)
@@ -71,6 +72,8 @@ type Props = {
   const [scheme] = useScheme()
   // Call hook unconditionally (must not be called conditionally after an early return)
   useDatabasePlaceholderEffect()
+  // Apply colors to list items (bullets, backgrounds) that might be missed by react-notion-x
+  useListItemColorEffect(recordMap)
 
   // KaTeX math rendering effect - moved to top level to follow React Hooks rules
   useEffect(() => {
@@ -172,7 +175,7 @@ type Props = {
   // Use effect to inject placeholders after render (hook is called above unconditionally)
 
   return (
-    <StyledWrapper>
+    <StyledWrapper className={scheme === 'dark' ? 'dark' : 'light'}>
       <_NotionRenderer
         darkMode={scheme === "dark"}
         recordMap={recordMap}
@@ -285,5 +288,134 @@ const StyledWrapper = styled.div`
   [data-theme="dark"] .notion-equation,
   .dark .notion-equation {
     background: transparent !important;
+  }
+  
+  /* Notion color classes - Light mode */
+  .notion-default {
+    color: var(--theme-colors-gray12);
+  }
+  .notion-gray {
+    color: var(--theme-colors-gray9);
+  }
+  .notion-brown {
+    color: #9f6b53;
+  }
+  .notion-orange {
+    color: #d9730d;
+  }
+  .notion-yellow {
+    color: #dfab01;
+  }
+  .notion-green {
+    color: #0f7b6c;
+  }
+  .notion-blue {
+    color: #0b6e99;
+  }
+  .notion-purple {
+    color: #6940a5;
+  }
+  .notion-pink {
+    color: #ad3a6a;
+  }
+  .notion-red {
+    color: #d92a2a;
+  }
+  
+  /* Notion background color classes - Light mode */
+  .notion-default_background {
+    background-color: transparent;
+  }
+  .notion-gray_background {
+    background-color: var(--theme-colors-gray4);
+  }
+  .notion-brown_background {
+    background-color: #f3e9e7;
+  }
+  .notion-orange_background {
+    background-color: #faebdd;
+  }
+  .notion-yellow_background {
+    background-color: #fbf3db;
+  }
+  .notion-green_background {
+    background-color: #ddedea;
+  }
+  .notion-blue_background {
+    background-color: #d6eaf3;
+  }
+  .notion-purple_background {
+    background-color: #eae4f2;
+  }
+  .notion-pink_background {
+    background-color: #f4e5ed;
+  }
+  .notion-red_background {
+    background-color: #fbe4e4;
+  }
+  
+  /* Dark mode color adjustments */
+  &.dark .notion-default { color: #FFFFFF; }
+  &.dark .notion-gray { color: #9B9B9B; }
+  &.dark .notion-brown { color: #937264; }
+  &.dark .notion-orange { color: #FFA344; }
+  &.dark .notion-yellow { color: #FFDC49; }
+  &.dark .notion-green { color: #4DAB9A; }
+  &.dark .notion-blue { color: #529CCA; }
+  &.dark .notion-purple { color: #9A6DD7; }
+  &.dark .notion-pink { color: #E255A1; }
+  &.dark .notion-red { color: #FF7369; }
+  
+  /* Dark mode background color adjustments */
+  &.dark .notion-gray_background { background-color: #454B4E; }
+  &.dark .notion-brown_background { background-color: #434040; }
+  &.dark .notion-orange_background { background-color: #594A3A; }
+  &.dark .notion-yellow_background { background-color: #59563B; }
+  &.dark .notion-green_background { background-color: #354C4B; }
+  &.dark .notion-blue_background { background-color: #364954; }
+  &.dark .notion-purple_background { background-color: #443F57; }
+  &.dark .notion-pink_background { background-color: #533B4C; }
+  &.dark .notion-red_background { background-color: #594141; }
+
+  /* Notion database item colors (tags, etc) */
+  .notion-item-default { background-color: rgba(206, 205, 202, 0.5); color: var(--fg-color); }
+  .notion-item-gray { background-color: rgba(155, 154, 151, 0.4); color: var(--fg-color); }
+  .notion-item-brown { background-color: rgba(140, 46, 0, 0.2); color: var(--fg-color); }
+  .notion-item-orange { background-color: rgba(245, 93, 0, 0.2); color: var(--fg-color); }
+  .notion-item-yellow { background-color: rgba(233, 168, 0, 0.2); color: var(--fg-color); }
+  .notion-item-green { background-color: rgba(0, 135, 107, 0.2); color: var(--fg-color); }
+  .notion-item-blue { background-color: rgba(0, 120, 223, 0.2); color: var(--fg-color); }
+  .notion-item-purple { background-color: rgba(103, 36, 222, 0.2); color: var(--fg-color); }
+  .notion-item-pink { background-color: rgba(221, 0, 129, 0.2); color: var(--fg-color); }
+  .notion-item-red { background-color: rgba(255, 0, 26, 0.2); color: var(--fg-color); }
+
+  &.dark .notion-item-default { background-color: rgba(206, 205, 202, 0.5); }
+  &.dark .notion-item-gray { background-color: rgba(151, 154, 155, 0.5); }
+  &.dark .notion-item-brown { background-color: rgba(147, 114, 100, 0.5); }
+  &.dark .notion-item-orange { background-color: rgba(255, 163, 68, 0.5); }
+  &.dark .notion-item-yellow { background-color: rgba(255, 220, 73, 0.5); }
+  &.dark .notion-item-green { background-color: rgba(77, 171, 154, 0.5); }
+  &.dark .notion-item-blue { background-color: rgba(82, 156, 202, 0.5); }
+  &.dark .notion-item-purple { background-color: rgba(154, 109, 215, 0.5); }
+  &.dark .notion-item-pink { background-color: rgba(226, 85, 161, 0.5); }
+  &.dark .notion-item-red { background-color: rgba(255, 115, 105, 0.5); }
+
+  /* Equation block styling */
+  .notion-equation-block {
+    text-align: center;
+    overflow: auto;
+  }
+  
+  .notion-equation-block .katex-display {
+    margin: 1em 0;
+  }
+  
+  .notion-equation-block .katex {
+    font-size: 1.3em;
+  }
+  
+  /* Inline equation styling to ensure visibility */
+  .notion-inline-equation .katex {
+    font-size: 1em;
   }
 `

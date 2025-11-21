@@ -180,10 +180,13 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
       const publicPosts = posts.filter(post => {
         const status = post.status?.[0]
         const isPublic = status === 'Public' || status === 'PublicOnDetail'
-        if (!isPublic && post.slug) {
+        const isPrivate = status === 'Private'
+        const isDev = process.env.NODE_ENV === 'development'
+        
+        if (!isPublic && !(isDev && isPrivate) && post.slug) {
           console.log(`🔒 [getPosts] Filtered out (not public): slug="${post.slug}", status="${status}"`)
         }
-        return isPublic
+        return isPublic || (isDev && isPrivate)
       })
 
       // Sort by date (newest first)

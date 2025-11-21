@@ -126,11 +126,21 @@ async function fetchChildBlocks(blockId: string, notion: any, recordMap: Extende
  * Convert rich text array to notion-types format with decorations
  */
 function convertRichText(richTextArray: any[]): any[][] {
-  if (!richTextArray || richTextArray.length === 0) return []
+  if (!richTextArray || !Array.isArray(richTextArray) || richTextArray.length === 0) return []
   
   return richTextArray.map((rt: any) => {
-    const text = rt.plain_text || ''
+    let text = ''
     const decorations: any[][] = []
+    
+    if (rt.type === 'equation') {
+      text = rt.equation?.expression || ''
+      // Inline equation decoration must be ['e', expression]
+      decorations.push(['e', text])
+    } else if (rt.type === 'text') {
+      text = rt.text?.content || rt.plain_text || ''
+    } else {
+      text = rt.plain_text || ''
+    }
     
     if (rt.annotations) {
       if (rt.annotations.bold) decorations.push(['b'])
@@ -173,11 +183,11 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
     // Handle specific block types
     switch (block.type) {
       case 'code':
-        if (blockData.rich_text) {
+        if (blockData.rich_text && Array.isArray(blockData.rich_text)) {
           properties.title = convertRichText(blockData.rich_text)
           properties.language = [[blockData.language || 'plain text']]
         }
-        if (blockData.caption && blockData.caption.length > 0) {
+        if (blockData.caption && Array.isArray(blockData.caption) && blockData.caption.length > 0) {
           properties.caption = convertRichText(blockData.caption)
         }
         break
@@ -257,6 +267,19 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
       case 'table':
         if (blockData.table_width) {
           format.table_width = blockData.table_width
+          
+          // Generate table_block_column_order for react-notion-x to render columns
+          const columnOrder: string[] = []
+          for (let i = 0; i < blockData.table_width; i++) {
+            columnOrder.push(`cell_${i}`)
+          }
+          format.table_block_column_order = columnOrder
+        }
+        if (blockData.has_column_header) {
+          format.table_block_column_header = true
+        }
+        if (blockData.has_row_header) {
+          format.table_block_row_header = true
         }
         break
         

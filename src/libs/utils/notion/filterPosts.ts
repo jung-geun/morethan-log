@@ -30,7 +30,8 @@ export function filterPosts(
     // filter data
     .filter((post) => {
       const postDate = new Date(post?.date?.start_date || post.createdTime)
-      const isValid = !(!post.title || !post.slug || postDate > tomorrow)
+      const isDev = process.env.NODE_ENV === 'development'
+      const isValid = !(!post.title || !post.slug || (!isDev && postDate > tomorrow))
       
       if (!isValid) {
         debugLog(`  ❌ [filterPosts] Rejected (invalid data): slug="${post.slug}", title="${post.title}"`)
@@ -41,7 +42,9 @@ export function filterPosts(
     // filter status
     .filter((post) => {
       const postStatus = post.status[0]
-      const isAccepted = acceptStatus.includes(postStatus)
+      const isDev = process.env.NODE_ENV === 'development'
+      const isPrivate = postStatus === 'Private'
+      const isAccepted = acceptStatus.includes(postStatus) || (isDev && isPrivate)
       
       if (!isAccepted) {
         debugLog(`  ❌ [filterPosts] Rejected (status): slug="${post.slug}", status="${postStatus}"`)
