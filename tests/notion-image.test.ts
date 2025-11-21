@@ -6,7 +6,7 @@
  */
 
 import 'dotenv/config'
-import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
+import type { PageObjectResponse, QueryDataSourceResponse } from '@notionhq/client/build/src/api-endpoints'
 import { getOfficialNotionClient } from 'src/apis/notion-client/notionClient'
 import { summarizeBlockTypes } from 'src/libs/utils/notion/analyzeBlocks'
 import type { BlockSummary } from 'src/libs/utils/notion/analyzeBlocks'
@@ -46,13 +46,13 @@ describeMaybe('Notion integration - test post lookup', () => {
     const collected: PageObjectResponse[] = []
     let cursor: string | null | undefined = undefined
     do {
-      const resp = await notion.dataSources.query({
+      const resp: QueryDataSourceResponse = await notion.dataSources.query({
         data_source_id: dataSourceId,
         page_size: 100,
         start_cursor: cursor ?? undefined,
       })
 
-      resp.results.forEach((entry) => {
+      resp.results.forEach((entry: any) => {
         if ('properties' in entry) {
           collected.push(entry as PageObjectResponse)
         }
@@ -157,4 +157,3 @@ describeMaybe('Notion integration - test post lookup', () => {
     })
   })
 })
-

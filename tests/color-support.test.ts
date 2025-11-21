@@ -3,6 +3,7 @@
  */
 
 import 'dotenv/config'
+import { Client } from '@notionhq/client'
 import { getOfficialNotionClient } from 'src/apis/notion-client/notionClient'
 import type {
   ParagraphBlockObjectResponse,
@@ -11,7 +12,7 @@ import type {
 } from '@notionhq/client/build/src/api-endpoints'
 
 // Notion Client initialization
-const notion = getOfficialNotionClient()
+// const notion = getOfficialNotionClient()
 
 // Test page ID - using the test-post page
 // Note: In a real scenario, it might be better to find this page dynamically like in notion-image.test.ts
@@ -26,6 +27,12 @@ if (!process.env.NOTION_TOKEN) {
 }
 
 describeMaybe('Notion API Color Support', () => {
+  let notion: Client
+
+  beforeAll(() => {
+    notion = getOfficialNotionClient()
+  })
+
   jest.setTimeout(60000)
 
   it('should retrieve paragraph, numbered_list_item, and bulleted_list_item blocks with color information', async () => {
