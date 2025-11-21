@@ -4,7 +4,25 @@
  * Tests for image proxy utilities, replacing scripts/test-unpack.js and scripts/test-unpack-cases.js
  */
 
-import { unwrapProxiedUrl } from 'src/libs/utils/image/proxyUtils'
+import { unwrapProxiedUrl, isAlreadyProxied } from 'src/libs/utils/image/proxyUtils'
+import { customMapImageUrl } from 'src/libs/utils/notion/customMapImageUrl'
+
+describe('isAlreadyProxied', () => {
+  it('should detect already proxied url', () => {
+    const url = '/api/image-proxy?url=https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Fimage.png'
+    expect(isAlreadyProxied(url)).toBe(true)
+  })
+})
+
+describe('customMapImageUrl', () => {
+  it('should NOT wrap already proxied URL', () => {
+    const url = '/api/image-proxy?url=https%3A%2F%2Fprod-files-secure.s3.us-west-2.amazonaws.com%2Fimage.png%3FX-Amz-Algorithm%3DAWS4-HMAC-SHA256%26X-Amz-Signature%3D123'
+    
+    // It should return the URL as is, because it's already proxied
+    const result = customMapImageUrl(url)
+    expect(result).toBe(url)
+  })
+})
 
 describe('unwrapProxiedUrl', () => {
   const cases = [

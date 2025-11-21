@@ -24,7 +24,12 @@ export const customMapImageUrl = (url: string, block?: Block, context?: CustomMa
     return url
   }
 
-  if (isAlreadyProxied(url)) {
+  const alreadyProxied = isAlreadyProxied(url)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[customMapImageUrl] isAlreadyProxied(${url}) = ${alreadyProxied}`)
+  }
+
+  if (alreadyProxied) {
     return url
   }
 
@@ -59,7 +64,13 @@ export const customMapImageUrl = (url: string, block?: Block, context?: CustomMa
   }
   
   // Also proxy other S3 URLs that might expire
-  if (url.includes('amazonaws.com') && url.includes('X-Amz-Signature')) {
+  // Ensure we don't double-proxy if the URL is already proxied but somehow missed by isAlreadyProxied
+  if (
+    url.includes('amazonaws.com') && 
+    url.includes('X-Amz-Signature') &&
+    !url.includes('/api/image-proxy') &&
+    !url.includes('%2Fapi%2Fimage-proxy')
+  ) {
     if (process.env.NODE_ENV !== 'production') {
       console.log('✅ [customMapImageUrl] Proxying S3 signed URL')
     }
