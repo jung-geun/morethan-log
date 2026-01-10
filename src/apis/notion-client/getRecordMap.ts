@@ -1,5 +1,6 @@
 import { ExtendedRecordMap } from "notion-types"
 import { getOfficialNotionClient } from "./notionClient"
+import { optimizeRecordMap } from "src/libs/utils/notion/optimizeRecordMap"
 
 /**
  * Convert Notion presigned URLs to our proxy URLs to prevent expiration
@@ -9,7 +10,7 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
   // Process all blocks to find and convert image URLs
   Object.entries(recordMap.block).forEach(([blockId, blockData]) => {
     const block = blockData.value
-    
+
     // Handle image blocks
     if (block.type === 'image' && block.properties?.source) {
       const sources = block.properties.source
@@ -24,7 +25,7 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
         })
       }
     }
-    
+
     // Handle cover images
     if (block.format?.page_cover) {
       const coverUrl = block.format.page_cover
@@ -32,7 +33,7 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
         block.format.page_cover = `/api/image-proxy?url=${encodeURIComponent(coverUrl)}`
       }
     }
-    
+
     // Handle page icons (if they're images)
     if (block.format?.page_icon) {
       const iconUrl = block.format.page_icon
@@ -40,7 +41,7 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
         block.format.page_icon = `/api/image-proxy?url=${encodeURIComponent(iconUrl)}`
       }
     }
-    
+
     // Handle block decorations (inline images)
     if (block.properties) {
       Object.values(block.properties).forEach((prop: any) => {
@@ -57,7 +58,7 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
       })
     }
   })
-  
+
   return recordMap
 }
 
@@ -66,17 +67,17 @@ function convertPresignedUrlsToProxy(recordMap: ExtendedRecordMap): ExtendedReco
  */
 function shouldProxyUrl(url: string): boolean {
   if (!url || typeof url !== 'string') return false
-  
+
   // Proxy S3 presigned URLs
   if (url.includes('amazonaws.com') && url.includes('X-Amz-Signature')) {
     return true
   }
-  
+
   // Proxy Notion's prod-files-secure URLs
   if (url.startsWith('https://prod-files-secure.s3.us-west-2.amazonaws.com')) {
     return true
   }
-  
+
   return false
 }
 
@@ -115,6 +116,10 @@ async function fetchChildBlocks(blockId: string, notion: any, recordMap: Extende
       cursor = resp.has_more ? resp.next_cursor : undefined
     } while (cursor)
 
+    if (childIds.length > 0) {
+      console.log(`📦 [fetchChildBlocks] Fetched ${childIds.length} children for block ${blockId}`)
+    }
+
     return childIds
   } catch (error) {
     console.error(`Failed to fetch children for block ${blockId}:`, error)
@@ -127,11 +132,11 @@ async function fetchChildBlocks(blockId: string, notion: any, recordMap: Extende
  */
 function convertRichText(richTextArray: any[]): any[][] {
   if (!richTextArray || !Array.isArray(richTextArray) || richTextArray.length === 0) return []
-  
+
   return richTextArray.map((rt: any) => {
     let text = ''
     const decorations: any[][] = []
-    
+
     if (rt.type === 'equation') {
       text = rt.equation?.expression || ''
       // Inline equation decoration must be ['e', expression]
@@ -141,7 +146,7 @@ function convertRichText(richTextArray: any[]): any[][] {
     } else {
       text = rt.plain_text || ''
     }
-    
+
     if (rt.annotations) {
       if (rt.annotations.bold) decorations.push(['b'])
       if (rt.annotations.italic) decorations.push(['i'])
@@ -152,11 +157,11 @@ function convertRichText(richTextArray: any[]): any[][] {
         decorations.push(['h', rt.annotations.color])
       }
     }
-    
+
     if (rt.href) {
       decorations.push(['a', rt.href])
     }
-    
+
     // Return format: [text, [decorations]] or [text] if no decorations
     if (decorations.length > 0) {
       return [text, decorations]
@@ -171,15 +176,15 @@ function convertRichText(richTextArray: any[]): any[][] {
 async function processBlock(block: any, parentId: string, notion: any, recordMap: ExtendedRecordMap): Promise<void> {
   const properties: any = {}
   const format: any = {}
-  
+
   if (block.type && block[block.type]) {
     const blockData = block[block.type]
-    
+
     // Handle blocks with rich_text (paragraph, headings, lists, quotes, callouts, toggles, etc.)
     if (blockData.rich_text && Array.isArray(blockData.rich_text)) {
       properties.title = convertRichText(blockData.rich_text)
     }
-    
+
     // Handle specific block types
     switch (block.type) {
       case 'code':
@@ -191,14 +196,14 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           properties.caption = convertRichText(blockData.caption)
         }
         break
-        
+
       case 'image':
         const imageUrl = blockData.file?.url || blockData.external?.url
         if (imageUrl) {
           console.log('🖼️ Image URL from Notion API:', imageUrl)
-          
+
           properties.source = [[imageUrl]]
-          
+
           // Add format for image display  
           format.display_source = imageUrl
         }
@@ -206,7 +211,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           properties.caption = convertRichText(blockData.caption)
         }
         break
-        
+
       case 'video':
       case 'file':
       case 'pdf':
@@ -218,7 +223,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           }
         }
         break
-        
+
       case 'bookmark':
       case 'link_preview':
         if (blockData.url) {
@@ -228,46 +233,38 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
             : [[blockData.url]]
         }
         break
-        
+
       case 'equation':
         if (blockData.expression) {
           properties.title = [[blockData.expression]]
         }
         break
-        
+
       case 'divider':
         // Divider has no properties
         break
-        
-      case 'table_of_contents':
-        // ToC has no properties
-        break
-        
-      case 'breadcrumb':
-        // Breadcrumb has no properties
-        break
-        
+
       case 'callout':
         if (blockData.icon) {
           format.page_icon = blockData.icon.emoji || blockData.icon.external?.url || blockData.icon.file?.url
         }
         break
-        
+
       case 'to_do':
         if (typeof blockData.checked !== 'undefined') {
           properties.checked = [[blockData.checked ? 'Yes' : 'No']]
         }
         break
-        
+
       case 'column_list':
       case 'column':
         // These are container blocks, handled by content
         break
-        
+
       case 'table':
         if (blockData.table_width) {
           format.table_width = blockData.table_width
-          
+
           // Generate table_block_column_order for react-notion-x to render columns
           const columnOrder: string[] = []
           for (let i = 0; i < blockData.table_width; i++) {
@@ -282,7 +279,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           format.table_block_row_header = true
         }
         break
-        
+
       case 'table_row':
         if (blockData.cells && Array.isArray(blockData.cells)) {
           // Convert table cells
@@ -293,7 +290,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           })
         }
         break
-        
+
       case 'child_database':
         // Database block - store metadata for placeholder rendering
         console.log('📊 [getRecordMap] Found child_database block:', block.id)
@@ -306,14 +303,48 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
           format.database_id = block.id
         }
         break
+
+      case 'synced_block':
+        // Synced block - children will be fetched automatically via has_children
+        // Store synced_from reference if available (points to original block)
+        console.log('🔄 [synced_block] Found:', {
+          id: block.id,
+          has_children: block.has_children,
+          synced_from: blockData.synced_from,
+        })
+        if (blockData.synced_from) {
+          format.synced_from = blockData.synced_from
+        }
+        break
+
+      case 'audio':
+        // Audio block - similar to video/file
+        const audioUrl = blockData.file?.url || blockData.external?.url
+        if (audioUrl) {
+          properties.source = [[audioUrl]]
+          // Add format for audio display
+          format.display_source = audioUrl
+          console.log('🎵 [getRecordMap] Audio block found:', block.id, audioUrl)
+        }
+        if (blockData.caption && blockData.caption.length > 0) {
+          properties.caption = convertRichText(blockData.caption)
+        }
+        break
+
+      case 'breadcrumb':
+      case 'table_of_contents':
+      case 'transclusion_container':
+        // Container blocks - no specific properties needed
+        // Children will be fetched automatically via has_children
+        break
     }
-    
+
     // Handle color for all block types
     if (blockData.color && blockData.color !== 'default') {
       format.block_color = blockData.color
     }
   }
-  
+
   // Map Official API block types to notion-types format
   const typeMapping: Record<string, string> = {
     'paragraph': 'text',
@@ -341,10 +372,16 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
     'embed': 'embed',
     'link_preview': 'bookmark',
     'child_database': 'collection_view_page', // Temporary: use collection_view_page for placeholder
+    // Additional block types
+    'synced_block': 'synced_block',
+    'audio': 'audio',
+    'breadcrumb': 'breadcrumb',
+    'table_of_contents': 'table_of_contents',
+    'transclusion_container': 'transclusion_container',
   }
-  
+
   const mappedType = typeMapping[block.type] || block.type
-  
+
   const blockValue: any = {
     id: block.id,
     version: 1,
@@ -356,12 +393,12 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
     parent_table: 'block',
     alive: true,
   }
-  
+
   // Add format if not empty
   if (Object.keys(format).length > 0) {
     blockValue.format = format
   }
-  
+
   // Fetch children if has_children is true
   if (block.has_children) {
     const childIds = await fetchChildBlocks(block.id, notion, recordMap)
@@ -369,7 +406,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
       blockValue.content = childIds
     }
   }
-  
+
   recordMap.block[block.id] = {
     role: 'reader',
     value: blockValue,
@@ -384,17 +421,17 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
  */
 export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | null> => {
   const notion = getOfficialNotionClient()
-  
+
   let retryCount = 0
   const maxRetries = 3
 
   while (retryCount < maxRetries) {
     try {
       console.log(`📡 Fetching page content for ${pageId}`)
-      
+
       // Get page metadata
       const page = await notion.pages.retrieve({ page_id: pageId })
-      
+
       // Get page blocks (content)
       // Fetch all top-level blocks for the page (paginated)
       const allBlocks: any[] = []
@@ -411,7 +448,7 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
 
       const blocks = { results: allBlocks }
       console.log(`✅ Retrieved page ${pageId} with ${blocks.results.length} blocks`)
-      
+
       // Transform to ExtendedRecordMap format for react-notion-x compatibility
       const recordMap: ExtendedRecordMap = {
         block: {},
@@ -421,7 +458,7 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
         collection_query: {},
         signed_urls: {},
       }
-      
+
       // Add page block
       recordMap.block[pageId] = {
         role: 'reader',
@@ -438,30 +475,33 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
           content: blocks.results.map((block: any) => block.id),
         } as any,
       }
-      
+
       // Process all child blocks (including nested children)
       for (const block of blocks.results) {
         await processBlock(block, pageId, notion, recordMap)
       }
-      
+
       // Convert all presigned URLs to proxy URLs to prevent expiration
       const finalRecordMap = convertPresignedUrlsToProxy(recordMap)
-      
+
+      // Optimize record map and flatten synced blocks
+      const optimizedRecordMap = optimizeRecordMap(finalRecordMap)
+
       if (process.env.NODE_ENV !== 'production') {
         console.log('🔄 [getRecordMap] Converted presigned URLs to proxy URLs')
       }
-      
-      return finalRecordMap
-      
+
+      return optimizedRecordMap
+
     } catch (error: any) {
       retryCount++
       console.error(`❌ getRecordMap attempt ${retryCount}/${maxRetries} failed for ${pageId}:`, error.message)
-      
+
       if (error.code === 'object_not_found') {
         console.error(`❌ Page ${pageId} not found or not accessible`)
         return null
       }
-      
+
       if (retryCount === maxRetries) {
         console.error(`❌ getRecordMap failed for ${pageId} after all retries`)
         return null
@@ -473,6 +513,6 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
       await new Promise(resolve => setTimeout(resolve, waitTime))
     }
   }
-  
+
   return null
 }

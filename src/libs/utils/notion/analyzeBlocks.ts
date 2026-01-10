@@ -103,6 +103,7 @@ function containsInlineEquation(block: BlockObjectResponse): boolean {
       return hasEquationText(block.to_do.rich_text)
     case 'code':
       return hasEquationText(block.code.caption)
+    // synced_block and transclusion_container don't have rich_text properties
     default:
       return false
   }

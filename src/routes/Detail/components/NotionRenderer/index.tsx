@@ -60,6 +60,20 @@ const Modal = dynamic(
   }
 )
 
+const Video = dynamic(
+  () => import("./Video").then((m) => m.Video),
+  {
+    ssr: false,
+  }
+)
+
+const Audio = dynamic(
+  () => import("./Audio").then((m) => m.Audio),
+  {
+    ssr: false,
+  }
+)
+
 const mapPageUrl = (id: string) => {
   return "https://www.notion.so/" + id.replace(/-/g, "")
 }
@@ -68,7 +82,7 @@ type Props = {
   recordMap: ExtendedRecordMap | null
 }
 
-  const NotionRenderer: FC<Props> = ({ recordMap }) => {
+const NotionRenderer: FC<Props> = ({ recordMap }) => {
   const [scheme] = useScheme()
   // Call hook unconditionally (must not be called conditionally after an early return)
   useDatabasePlaceholderEffect()
@@ -79,37 +93,37 @@ type Props = {
   useEffect(() => {
     // Only run on client side and when recordMap is available
     if (!recordMap || typeof window === 'undefined') return
-    
+
     // Check if KaTeX is available
     const checkAndRenderMath = () => {
       if (!window.katex) {
         console.log('KaTeX: Not available, skipping math rendering')
         return
       }
-      
+
       // Look for inline math expressions that weren't rendered by Equation component
       const notionPage = document.querySelector('.notion-page')
       if (!notionPage) return
-      
+
       // Find all text content that might contain math delimiters
       const allTextElements = notionPage.querySelectorAll('p, span, div')
       let foundMath = false
-      
+
       allTextElements.forEach(element => {
         const text = element.textContent || ''
         // Check for unrendered math expressions
-        if ((text.includes('$') || text.includes('\\(') || text.includes('\\[')) && 
-            !element.querySelector('.katex') && 
-            !element.classList.contains('katex')) {
-          
+        if ((text.includes('$') || text.includes('\\(') || text.includes('\\[')) &&
+          !element.querySelector('.katex') &&
+          !element.classList.contains('katex')) {
+
           // Try to render math in this element
           try {
             window.renderMathInElement(element, {
               delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\[', right: '\\]', display: true},
-                {left: '\\(', right: '\\)', display: false}
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\[', right: '\\]', display: true },
+                { left: '\\(', right: '\\)', display: false }
               ],
               throwOnError: false
             })
@@ -119,40 +133,191 @@ type Props = {
           }
         }
       })
-      
+
       console.log(`KaTeX: ${foundMath ? 'Found and rendered math' : 'No unrendered math found'}`)
     }
-    
+
     // Wait a bit for the page to fully render
     setTimeout(checkAndRenderMath, 1000)
-    
+
     // Also check after navigation changes
     const observer = new MutationObserver(() => {
       setTimeout(checkAndRenderMath, 500)
     })
-    
+
     observer.observe(document.body, {
       childList: true,
       subtree: true
     })
-    
+
     // Manual re-render function for debugging
     window.renderMathManually = checkAndRenderMath
-    
+
     return () => {
       observer.disconnect()
       delete window.renderMathManually
     }
   }, [recordMap]) // Re-run when recordMap changes
 
+  // YouTube 라이트 로딩을 iframe으로 교체 및 오디오 블록 렌더링
+  useEffect(() => {
+    if (!recordMap || typeof window === 'undefined') return
+
+    const replaceYouTubeLite = () => {
+      const ytLiteElements = document.querySelectorAll('.notion-yt-lite')
+
+      ytLiteElements.forEach((element) => {
+        // 이미 처리된 요소는 건너뜀
+        if (element.hasAttribute('data-yt-processed')) return
+
+        // 썸네일에서 YouTube ID 추출
+        const img = element.querySelector('img.notion-yt-thumbnail')
+        if (!img) return
+
+        const src = img.getAttribute('src')
+        if (!src) return
+
+        const match = src.match(/vi\/([^\/]+)\//)
+        if (!match) return
+
+        const videoId = match[1]
+
+        // iframe 생성
+        const iframe = document.createElement('iframe')
+        iframe.src = `https://www.youtube.com/embed/${videoId}`
+        iframe.style.cssText = 'width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0;'
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+        iframe.allowFullscreen = true
+        iframe.title = 'YouTube video'
+
+        // 부모 요소 스타일 수정
+        const parent = element.parentElement
+        if (parent) {
+          parent.style.position = 'relative'
+          parent.style.paddingBottom = '56.25%'
+          parent.style.height = '0'
+          parent.style.width = 'auto'
+          parent.style.maxWidth = '100%'
+          parent.style.overflow = 'hidden'
+          parent.style.borderRadius = '4px'
+          parent.style.background = '#f1f1f1'
+        }
+
+        // 교체
+        element.replaceWith(iframe)
+        element.setAttribute('data-yt-processed', 'true')
+
+        // figure 요소 찾아서 제거하고 iframe만 남기기
+        setTimeout(() => {
+          const figure = iframe.closest('figure.notion-asset-wrapper-video')
+          if (figure) {
+            const figureParent = figure.parentElement
+            if (figureParent) {
+              // 새로운 wrapper 생성
+              const wrapper = document.createElement('div')
+              wrapper.style.cssText = 'position: relative; width: 100%; max-width: 100%; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 4px; background: #f1f1f1; margin: 1rem 0;'
+
+              // iframe 스타일 수정 (wrapper 내에서 absolute)
+              iframe.style.cssText = 'width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0;'
+
+              // wrapper에 iframe 추가
+              wrapper.appendChild(iframe)
+
+              // wrapper를 figure 밖으로 이동
+              figureParent.insertBefore(wrapper, figure)
+
+              // figure 제거
+              figure.remove()
+            }
+          }
+        }, 100)
+      })
+    }
+
+    // 오디오 블록 렌더링 (react-notion-x가 오디오를 지원하지 않으므로 직접 처리)
+    const renderAudioBlocks = () => {
+      // recordMap에서 audio 타입 블록 찾기
+      Object.entries(recordMap.block).forEach(([blockId, blockData]) => {
+        if (blockData.value.type === 'audio') {
+          const element = document.querySelector(`[data-block-id="${blockId}"]`)
+          if (!element || element.hasAttribute('data-audio-processed')) return
+
+          const blockValue = blockData.value
+          const format = (blockValue.format || {}) as any
+          const properties = blockValue.properties || {}
+
+          let audioUrl = null
+
+          // URL 파싱 - 여러 소스 확인
+          if (properties.source && Array.isArray(properties.source) && properties.source.length > 0) {
+            audioUrl = properties.source[0][0]
+          }
+          if (!audioUrl && format.display_source) {
+            audioUrl = format.display_source
+          }
+          if (!audioUrl && format.block_source) {
+            for (const sourceItem of format.block_source) {
+              if (sourceItem.url) {
+                audioUrl = sourceItem.url
+                break
+              }
+            }
+          }
+
+          if (audioUrl) {
+            const wrapper = document.createElement('div')
+            wrapper.className = 'notion-audio-wrapper'
+            wrapper.style.cssText = 'margin: 1rem 0;'
+
+            const audioEl = document.createElement('audio')
+            audioEl.controls = true
+            audioEl.preload = 'metadata'
+            audioEl.style.cssText = 'width: 100%; max-width: 100%;'
+
+            const sourceEl = document.createElement('source')
+            sourceEl.src = audioUrl
+
+            audioEl.appendChild(sourceEl)
+            wrapper.appendChild(audioEl)
+
+            element.innerHTML = ''
+            element.appendChild(wrapper)
+            element.setAttribute('data-audio-processed', 'true')
+
+            console.log('🎵 [Audio] Rendered audio block from recordMap:', blockId, audioUrl)
+          }
+        }
+      })
+    }
+
+    // 페이지 렌더링 후 실행
+    setTimeout(replaceYouTubeLite, 500)
+    setTimeout(renderAudioBlocks, 500)
+
+    // DOM 변경 감지
+    const observer = new MutationObserver(() => {
+      setTimeout(replaceYouTubeLite, 100)
+      setTimeout(renderAudioBlocks, 100)
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    })
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [recordMap])
+
   // Handle case where recordMap is not available
   if (!recordMap) {
     return (
       <StyledWrapper>
-        <div style={{ 
-          padding: '2rem', 
-          textAlign: 'center', 
-          color: 'var(--theme-colors-gray11)' 
+        <div style={{
+          padding: '2rem',
+          textAlign: 'center',
+          color: 'var(--theme-colors-gray11)'
         }}>
           <p>콘텐츠를 불러오는 중 문제가 발생했습니다.</p>
           <p>잠시 후 다시 시도해주세요.</p>
@@ -162,8 +327,8 @@ type Props = {
   }
 
   // Find all database blocks
-  const databaseBlocks: Array<{blockId: string; databaseId: string; title: string}> = []
-  
+  const databaseBlocks: Array<{ blockId: string; databaseId: string; title: string }> = []
+
   Object.entries(recordMap.block).forEach(([blockId, blockData]) => {
     if (blockData.value.type === 'collection_view_page') {
       const databaseId = (blockData.value.format as any)?.database_id || blockId
@@ -185,13 +350,17 @@ type Props = {
           Equation,
           Modal,
           Pdf,
+          Video,
+          video: Video,
+          Audio,
+          audio: Audio,
           nextImage: Image,
           nextLink: Link,
-        }}
+        } as any}
         mapPageUrl={mapPageUrl}
         mapImageUrl={customMapImageUrl}
       />
-      
+
       {/* Render database placeholders inline - they will be positioned by CSS */}
       {databaseBlocks.map(({ blockId, databaseId, title }) => (
         <div
@@ -225,6 +394,44 @@ const StyledWrapper = styled.div`
   .notion-collection-view,
   .notion-collection_view {
     display: none !important;
+  }
+  
+  /* Handle synced_block: hide the container but show children */
+  .notion-synced-block {
+    display: none !important;
+  }
+  
+  /* Make sure synced_block children are visible */
+  .notion-synced-block > .notion-block {
+    display: block !important;
+  }
+  
+  /* Hide unsupported block type containers */
+  .notion-breadcrumb,
+  .notion-table_of_contents,
+  .notion-transclusion_container {
+    display: none !important;
+  }
+  
+  /* Audio block styling */
+  .notion-audio {
+    margin: 1rem 0;
+  }
+  
+  .notion-audio-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .notion-audio audio {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Dark mode audio styling */
+  &.dark .notion-audio audio {
+    background: #2a2a2a;
+    border-radius: 4px;
   }
   
   /* Database placeholder wrappers */
@@ -417,5 +624,51 @@ const StyledWrapper = styled.div`
   /* Inline equation styling to ensure visibility */
   .notion-inline-equation .katex {
     font-size: 1em;
+  }
+  
+  /* Video block styling */
+  .notion-video {
+    margin: 1rem 0;
+  }
+  
+  .notion-video-wrapper {
+    position: relative;
+  }
+  
+  /* Dark mode video background */
+  &.dark .notion-video-wrapper {
+    background: #2a2a2a;
+  }
+  
+  /* 비디오 asset wrapper 스타일 수정 */
+  .notion-asset-wrapper {
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  
+  .notion-asset-wrapper-video {
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  
+  .notion-asset-wrapper-video > div {
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  
+  .notion-asset-wrapper-video video {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  
+  /* 메인 컨테이너 내에서만 비디오 표시 */
+  .notion-page .notion-asset-wrapper-video {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  
+  /* YouTube 라이트 로딩 숨기기 */
+  .notion-yt-lite {
+    display: none !important;
   }
 `
