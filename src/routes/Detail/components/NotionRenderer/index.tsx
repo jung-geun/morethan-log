@@ -1,12 +1,13 @@
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import Link from "next/link"
-import { ExtendedRecordMap } from "notion-types"
+import { ExtendedRecordMap, Block } from "notion-types"
 import useScheme from "src/hooks/useScheme"
 import DatabasePlaceholder from "src/components/DatabasePlaceholder"
 import { useDatabasePlaceholderEffect } from "./useDatabasePlaceholderEffect"
 import { useListItemColorEffect } from "./useListItemColorEffect"
 import { useEffect } from "react"
+import { customMapImageUrl } from "src/libs/utils/notion/customMapImageUrl"
 
 // core styles shared by all of react-notion-x (required)
 import "react-notion-x/src/styles.css"
@@ -77,6 +78,11 @@ const mapPageUrl = (id: string) => {
   return "https://www.notion.so/" + id.replace(/-/g, "")
 }
 
+const mapImageUrlWrapper = (url: string | undefined, block: Block) => {
+  if (!url) return ""
+  return customMapImageUrl(url, block, { source: 'recordMap' })
+}
+
 type Props = {
   recordMap: ExtendedRecordMap | null
 }
@@ -86,7 +92,7 @@ type Props = {
   // Call hook unconditionally (must not be called conditionally after an early return)
   useDatabasePlaceholderEffect()
   
-  // Log all blocks in the current page
+  // Log all blocks in the current page (dev/test only)
   useEffect(() => {
     if (!recordMap) return
     
@@ -107,33 +113,35 @@ type Props = {
       }
     })
     
-    console.group('📋 [Page Blocks]')
-    console.log(`Total blocks: ${totalBlocks}`)
-    
-    console.group('📊 Block Types Summary:')
-    Object.entries(typeStats)
-      .sort(([, a], [, b]) => b - a)
-      .forEach(([type, count]) => {
-        console.log(`  ${type}: ${count}`)
-      })
-    console.groupEnd()
-    
-    if (specialBlocks.length > 0) {
-      console.group('🎯 Special Blocks:')
-      specialBlocks.forEach(({ id, type }) => {
-        console.log(`  ${id} | type: ${type}`)
+    if (process.env.NODE_ENV !== 'production') {
+      console.group('📋 [Page Blocks]')
+      console.log(`Total blocks: ${totalBlocks}`)
+      
+      console.group('📊 Block Types Summary:')
+      Object.entries(typeStats)
+        .sort(([, a], [, b]) => b - a)
+        .forEach(([type, count]) => {
+          console.log(`  ${type}: ${count}`)
+        })
+      console.groupEnd()
+      
+      if (specialBlocks.length > 0) {
+        console.group('🎯 Special Blocks:')
+        specialBlocks.forEach(({ id, type }) => {
+          console.log(`  ${id} | type: ${type}`)
+        })
+        console.groupEnd()
+      }
+      
+      console.group('📄 All Blocks:')
+      blocks.forEach(([blockId, blockData], index) => {
+        const type = blockData.value.type
+        const role = blockData.role
+        console.log(`  [${index + 1}] ${blockId} | type: ${type} | role: ${role}`)
       })
       console.groupEnd()
+      console.groupEnd()
     }
-    
-    console.group('📄 All Blocks:')
-    blocks.forEach(([blockId, blockData], index) => {
-      const type = blockData.value.type
-      const role = blockData.role
-      console.log(`  [${index + 1}] ${blockId} | type: ${type} | role: ${role}`)
-    })
-    console.groupEnd()
-    console.groupEnd()
   }, [recordMap])
   // Apply colors to list items (bullets, backgrounds) that might be missed by react-notion-x
   useListItemColorEffect(recordMap)
@@ -146,7 +154,9 @@ type Props = {
     // Check if KaTeX is available
     const checkAndRenderMath = () => {
       if (!window.katex) {
-        console.log('KaTeX: Not available, skipping math rendering')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('KaTeX: Not available, skipping math rendering')
+        }
         return
       }
 
@@ -178,12 +188,16 @@ type Props = {
             })
             foundMath = true
           } catch (error) {
-            console.warn('KaTeX: Failed to render math in element:', error)
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn('KaTeX: Failed to render math in element:', error)
+            }
           }
         }
       })
 
-      console.log(`KaTeX: ${foundMath ? 'Found and rendered math' : 'No unrendered math found'}`)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`KaTeX: ${foundMath ? 'Found and rendered math' : 'No unrendered math found'}`)
+      }
     }
 
     // Wait a bit for the page to fully render
@@ -333,7 +347,9 @@ type Props = {
             element.appendChild(wrapper)
             element.setAttribute('data-audio-processed', 'true')
 
-            console.log('🎵 [Audio] Rendered audio block from recordMap:', blockId, audioUrl)
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('🎵 [Audio] Rendered audio block from recordMap:', blockId, audioUrl)
+            }
           }
         }
       })
@@ -356,6 +372,105 @@ type Props = {
 
     return () => {
       observer.disconnect()
+    }
+  }, [recordMap])
+
+  // Refresh expired image URLs on load failure
+  useEffect(() => {
+    if (!recordMap || typeof window === 'undefined') return
+
+    const refreshImageOnLoadError = async (img: HTMLImageElement, blockId: string) => {
+      try {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`🔄 [ImageRefresh] Refreshing image for block ${blockId}`)
+        }
+        
+        const response = await fetch(`/api/refresh-image?blockId=${encodeURIComponent(blockId)}`)
+        if (!response.ok) {
+          throw new Error(`Failed to refresh: ${response.status}`)
+        }
+
+        const data = await response.json()
+        if (!data.url) {
+          throw new Error('No URL in response')
+        }
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`✅ [ImageRefresh] Refreshed URL for block ${blockId}`)
+        }
+        
+        // Construct Notion proxy URL with fresh S3 URL
+        const notionProxyUrl = new URL('https://www.notion.so/image/' + encodeURIComponent(data.url))
+        notionProxyUrl.searchParams.set('cache', 'v2')
+        notionProxyUrl.searchParams.set('table', 'block')
+        notionProxyUrl.searchParams.set('id', blockId)
+        
+        const freshUrl = notionProxyUrl.toString()
+        
+        // Update the image source
+        img.src = freshUrl
+        
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(`❌ [ImageRefresh] Failed to refresh image for block ${blockId}:`, error)
+        }
+      }
+    }
+
+    // Track blocks that have been attempted to refresh to avoid infinite loops
+    const refreshAttempts = new Set<string>()
+
+    const handleImageError = (event: Event) => {
+      const img = event.target as HTMLImageElement
+      const container = img.closest('[data-block-id]')
+      
+      if (!container) return
+      
+      const blockId = container.getAttribute('data-block-id')
+      if (!blockId) return
+      
+      // Skip if already attempted to refresh this block
+      if (refreshAttempts.has(blockId)) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`⏭️ [ImageRefresh] Already attempted to refresh block ${blockId}, skipping`)
+        }
+        return
+      }
+      
+      refreshAttempts.add(blockId)
+      
+      // Check if this is a Notion proxy URL that might be expired
+      const currentSrc = img.src
+      if (currentSrc.includes('notion.so/image/') || currentSrc.includes('amazonaws.com')) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`⚠️ [ImageRefresh] Image load failed for block ${blockId}, attempting refresh`)
+        }
+        refreshImageOnLoadError(img, blockId)
+      }
+    }
+
+    // Add error listener to all images
+    const observer = new MutationObserver(() => {
+      const images = document.querySelectorAll('img.notion-asset-wrapper-image, img.medium-zoom-image')
+      images.forEach(img => {
+        // Remove existing listener to avoid duplicates
+        img.removeEventListener('error', handleImageError)
+        img.addEventListener('error', handleImageError)
+      })
+    })
+
+    // Initial setup
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    })
+
+    return () => {
+      observer.disconnect()
+      const images = document.querySelectorAll('img.notion-asset-wrapper-image, img.medium-zoom-image')
+      images.forEach(img => {
+        img.removeEventListener('error', handleImageError)
+      })
     }
   }, [recordMap])
 
@@ -407,6 +522,7 @@ type Props = {
           nextLink: Link,
         } as any}
         mapPageUrl={mapPageUrl}
+        mapImageUrl={mapImageUrlWrapper}
       />
 
       {/* Render database placeholders inline - they will be positioned by CSS */}
