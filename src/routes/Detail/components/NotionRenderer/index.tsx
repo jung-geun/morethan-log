@@ -82,10 +82,60 @@ type Props = {
   recordMap: ExtendedRecordMap | null
 }
 
-const NotionRenderer: FC<Props> = ({ recordMap }) => {
+  const NotionRenderer: FC<Props> = ({ recordMap }) => {
   const [scheme] = useScheme()
   // Call hook unconditionally (must not be called conditionally after an early return)
   useDatabasePlaceholderEffect()
+  
+  // Log all blocks in the current page
+  useEffect(() => {
+    if (!recordMap) return
+    
+    const blocks = Object.entries(recordMap.block)
+    const totalBlocks = blocks.length
+    
+    // Count blocks by type
+    const typeStats: Record<string, number> = {}
+    const specialBlocks: Array<{ id: string; type: string; info?: string }> = []
+    
+    blocks.forEach(([blockId, blockData]) => {
+      const type = blockData.value.type
+      typeStats[type] = (typeStats[type] ?? 0) + 1
+      
+      // Track special blocks
+      if (['collection_view_page', 'collection_view', 'image', 'video', 'audio', 'pdf', 'file', 'equation'].includes(type)) {
+        specialBlocks.push({ id: blockId, type })
+      }
+    })
+    
+    console.group('📋 [Page Blocks]')
+    console.log(`Total blocks: ${totalBlocks}`)
+    
+    console.group('📊 Block Types Summary:')
+    Object.entries(typeStats)
+      .sort(([, a], [, b]) => b - a)
+      .forEach(([type, count]) => {
+        console.log(`  ${type}: ${count}`)
+      })
+    console.groupEnd()
+    
+    if (specialBlocks.length > 0) {
+      console.group('🎯 Special Blocks:')
+      specialBlocks.forEach(({ id, type }) => {
+        console.log(`  ${id} | type: ${type}`)
+      })
+      console.groupEnd()
+    }
+    
+    console.group('📄 All Blocks:')
+    blocks.forEach(([blockId, blockData], index) => {
+      const type = blockData.value.type
+      const role = blockData.role
+      console.log(`  [${index + 1}] ${blockId} | type: ${type} | role: ${role}`)
+    })
+    console.groupEnd()
+    console.groupEnd()
+  }, [recordMap])
   // Apply colors to list items (bullets, backgrounds) that might be missed by react-notion-x
   useListItemColorEffect(recordMap)
 
@@ -358,7 +408,7 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
           nextLink: Link,
         } as any}
         mapPageUrl={mapPageUrl}
-        mapImageUrl={customMapImageUrl}
+        mapImageUrl={customMapImageUrl as any}
       />
 
       {/* Render database placeholders inline - they will be positioned by CSS */}

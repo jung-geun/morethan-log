@@ -14,9 +14,9 @@
     "postbuild": "next-sitemap --config next-sitemap.config.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-  "test": "jest --config jest.config.js",
-  "test:watch": "jest --config jest.config.js --watch",
-  "test:coverage": "jest --config jest.config.js --coverage"
+    "test": "jest --config jest.config.js",
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:coverage": "jest --config jest.config.js --coverage"
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
@@ -34,13 +34,13 @@
     "katex": "^0.16.25",
     "mermaid": "^10.9.1",
     "next": "^13.4.9",
-    "notion-types": "^6.16.0",
-    "notion-utils": "^6.16.0",
+    "notion-types": "^7.7.3",
+    "notion-utils": "^7.7.3",
     "prismjs": "^1.29.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^4.4.0",
-    "react-notion-x": "^6.16.0"
+    "react-notion-x": "^7.7.3"
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",

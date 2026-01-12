@@ -86,7 +86,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
     }
 
     try {
-      const rawRecordMap = await getRecordMap(postDetail?.id!)
+      const rawRecordMap = await getRecordMap(postDetail?.id!, posts)
       const recordMap = optimizeRecordMap(rawRecordMap)
 
       await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({

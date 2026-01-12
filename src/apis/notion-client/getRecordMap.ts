@@ -1,6 +1,7 @@
 import { ExtendedRecordMap } from "notion-types"
 import { getOfficialNotionClient } from "./notionClient"
 import { optimizeRecordMap } from "src/libs/utils/notion/optimizeRecordMap"
+import { TPosts } from "src/types"
 
 /**
  * Convert Notion presigned URLs to our proxy URLs to prevent expiration
@@ -85,7 +86,7 @@ function shouldProxyUrl(url: string): boolean {
 /**
  * Recursively fetch child blocks
  */
-async function fetchChildBlocks(blockId: string, notion: any, recordMap: ExtendedRecordMap): Promise<string[]> {
+async function fetchChildBlocks(blockId: string, notion: any, recordMap: ExtendedRecordMap, allPosts?: TPosts): Promise<string[]> {
   try {
     const childIds: string[] = []
 
@@ -104,7 +105,7 @@ async function fetchChildBlocks(blockId: string, notion: any, recordMap: Extende
       for (const block of resp.results) {
         childIds.push(block.id)
         // process each block (this may in turn fetch deeper children)
-        await processBlock(block, blockId, notion, recordMap)
+        await processBlock(block, blockId, notion, recordMap, allPosts)
       }
 
       fetched += resp.results.length
@@ -173,7 +174,7 @@ function convertRichText(richTextArray: any[]): any[][] {
 /**
  * Process a single block and add it to recordMap
  */
-async function processBlock(block: any, parentId: string, notion: any, recordMap: ExtendedRecordMap): Promise<void> {
+async function processBlock(block: any, parentId: string, notion: any, recordMap: ExtendedRecordMap, allPosts?: TPosts): Promise<void> {
   const properties: any = {}
   const format: any = {}
 
@@ -187,6 +188,51 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
 
     // Handle specific block types
     switch (block.type) {
+      case 'link_to_page':
+        // Link to page block - convert to text with link decoration
+        const linkToPageData = blockData
+        if (linkToPageData) {
+          const linkedPageId = linkToPageData.page_id || linkToPageData.database_id
+          const linkedType = linkToPageData.type // 'page' or 'database'
+
+          if (linkedPageId) {
+            // Try to find the linked page in recordMap to get its title
+            let pageTitle = linkedType === 'database' ? 'Database' : 'Page'
+
+            // Search for the page in recordMap
+            const linkedPageBlock = recordMap.block[linkedPageId]?.value
+            if (linkedPageBlock) {
+              // Extract title from properties
+              const titleProp = linkedPageBlock.properties?.title
+              if (titleProp && Array.isArray(titleProp) && titleProp.length > 0) {
+                pageTitle = titleProp[0][0] || pageTitle
+              }
+            }
+
+            // Find the linked post in allPosts to get its slug
+            const linkedPost = allPosts?.find((post) => post.id === linkedPageId)
+            // Create link decoration - use slug if available, otherwise fallback to page ID
+            const pageUrl = linkedPost?.slug
+              ? `/${linkedPost.slug}`
+              : linkedType === 'database'
+                ? `/database/${linkedPageId}`
+                : `/[page-id]?id=${linkedPageId}`
+            pageTitle = (linkedPost ? linkedPost.title : pageTitle) || pageTitle
+
+            properties.title = [[pageTitle, [['a', pageUrl]]]]
+
+            // console.log(`🔗 [link_to_page] Converted to text link:`, {
+            //   blockId: block.id,
+            //   linkedPageId,
+            //   linkedType,
+            //   pageTitle,
+            //   pageUrl,
+            //   slug: linkedPost?.slug,
+            // })
+          }
+        }
+        break
+
       case 'code':
         if (blockData.rich_text && Array.isArray(blockData.rich_text)) {
           properties.title = convertRichText(blockData.rich_text)
@@ -307,7 +353,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
       case 'synced_block':
         // Synced block - children will be fetched automatically via has_children
         // Store synced_from reference if available (points to original block)
-        console.log('🔄 [synced_block] Found:', {
+        console.log('� [synced_block] Found:', {
           id: block.id,
           has_children: block.has_children,
           synced_from: blockData.synced_from,
@@ -374,6 +420,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
     'child_database': 'collection_view_page', // Temporary: use collection_view_page for placeholder
     // Additional block types
     'synced_block': 'synced_block',
+    'link_to_page': 'text', // Convert link_to_page to text with link decoration
     'audio': 'audio',
     'breadcrumb': 'breadcrumb',
     'table_of_contents': 'table_of_contents',
@@ -401,7 +448,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
 
   // Fetch children if has_children is true
   if (block.has_children) {
-    const childIds = await fetchChildBlocks(block.id, notion, recordMap)
+    const childIds = await fetchChildBlocks(block.id, notion, recordMap, allPosts)
     if (childIds.length > 0) {
       blockValue.content = childIds
     }
@@ -419,7 +466,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
  * 
  * Note: This returns a compatible structure for react-notion-x
  */
-export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | null> => {
+export const getRecordMap = async (pageId: string, allPosts?: TPosts): Promise<ExtendedRecordMap | null> => {
   const notion = getOfficialNotionClient()
 
   let retryCount = 0
@@ -478,7 +525,7 @@ export const getRecordMap = async (pageId: string): Promise<ExtendedRecordMap | 
 
       // Process all child blocks (including nested children)
       for (const block of blocks.results) {
-        await processBlock(block, pageId, notion, recordMap)
+        await processBlock(block, pageId, notion, recordMap, allPosts)
       }
 
       // Convert all presigned URLs to proxy URLs to prevent expiration
