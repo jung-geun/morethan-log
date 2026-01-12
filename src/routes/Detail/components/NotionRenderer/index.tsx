@@ -3,7 +3,6 @@ import Image from "next/image"
 import Link from "next/link"
 import { ExtendedRecordMap } from "notion-types"
 import useScheme from "src/hooks/useScheme"
-import { customMapImageUrl } from "src/libs/utils/notion"
 import DatabasePlaceholder from "src/components/DatabasePlaceholder"
 import { useDatabasePlaceholderEffect } from "./useDatabasePlaceholderEffect"
 import { useListItemColorEffect } from "./useListItemColorEffect"
@@ -408,7 +407,6 @@ type Props = {
           nextLink: Link,
         } as any}
         mapPageUrl={mapPageUrl}
-        mapImageUrl={customMapImageUrl as any}
       />
 
       {/* Render database placeholders inline - they will be positioned by CSS */}

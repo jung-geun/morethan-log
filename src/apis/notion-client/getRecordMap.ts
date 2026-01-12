@@ -245,6 +245,8 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
 
       case 'image':
         const imageUrl = blockData.file?.url || blockData.external?.url
+        console.log('🖼️ [processBlock] Image block found:', block.id, imageUrl)
+        console.log('🖼️ [processBlock] Full block data:', blockData)
         if (imageUrl) {
           console.log('🖼️ Image URL from Notion API:', imageUrl)
 
@@ -528,15 +530,8 @@ export const getRecordMap = async (pageId: string, allPosts?: TPosts): Promise<E
         await processBlock(block, pageId, notion, recordMap, allPosts)
       }
 
-      // Convert all presigned URLs to proxy URLs to prevent expiration
-      const finalRecordMap = convertPresignedUrlsToProxy(recordMap)
-
       // Optimize record map and flatten synced blocks
-      const optimizedRecordMap = optimizeRecordMap(finalRecordMap)
-
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('🔄 [getRecordMap] Converted presigned URLs to proxy URLs')
-      }
+      const optimizedRecordMap = optimizeRecordMap(recordMap)
 
       return optimizedRecordMap
 

@@ -3,7 +3,6 @@ import Tag from "src/components/Tag"
 import { TPost } from "src/types"
 import { formatDate } from "src/libs/utils"
 import Image from "next/image"
-import { customMapImageUrl } from "src/libs/utils/notion/customMapImageUrl"
 import React from "react"
 import styled from "@emotion/styled"
 
@@ -55,13 +54,7 @@ const PostHeader: React.FC<Props> = ({ data }) => {
         {data.thumbnail && (
           <div className="thumbnail">
             <Image
-              src={(() => {
-                try {
-                  return customMapImageUrl(data.thumbnail)
-                } catch (e) {
-                  return data.thumbnail
-                }
-              })()}
+              src={data.thumbnail}
               css={{ objectFit: "cover" }}
               fill
               alt={data.title}

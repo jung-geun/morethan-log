@@ -1,7 +1,6 @@
 import { CONFIG } from "site.config"
 import { TPosts, TPost } from "src/types"
 import { getOfficialNotionClient } from "./notionClient"
-import { customMapImageUrl } from "src/libs/utils/notion/customMapImageUrl"
 const { notionCache } = require("src/libs/notionCache")
 
 /**
@@ -104,59 +103,14 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
                   if (key === 'Slug' || key === 'slug') {
                     post.slug = prop.url
                   } else if (key === 'Thumbnail' || key === 'thumbnail') {
-                    try {
-                      // Diagnostic: if the Notion-provided URL is an S3 URL but
-                      // appears to be missing signature params, record it for
-                      // investigation before attempting to proxy.
-                      try {
-                        if (String(prop.url).includes('amazonaws.com') && !String(prop.url).includes('X-Amz-Signature')) {
-                          try {
-                            const diagDir = require('path').resolve(process.cwd(), 'logs')
-                            if (!require('fs').existsSync(diagDir)) require('fs').mkdirSync(diagDir, { recursive: true })
-                            const diagFile = require('path').join(diagDir, 'notion-image-diagnostics.jsonl')
-                            const rec = {
-                              timestamp: new Date().toISOString(),
-                              pageId: page.id,
-                              propertyKey: key,
-                              rawUrl: String(prop.url).slice(0, 2000)
-                            }
-                            require('fs').appendFileSync(diagFile, JSON.stringify(rec) + '\n')
-                          } catch (e) {
-                            console.log('[getPosts] failed to write diagnostic', (e as any).message)
-                          }
-                        }
-                      } catch (e) {
-                        // ignore diagnostic failures
-                      }
-
-                      post.thumbnail = customMapImageUrl(prop.url, undefined, {
-                        pageId: page.id,
-                        property: key,
-                        propertyType: prop.type,
-                        source: 'pageProperty',
-                      })
-                    } catch (e) {
-                      post.thumbnail = prop.url
-                    }
+                    post.thumbnail = prop.url
                   }
                 }
                 break
               case 'files':
                   if (prop.files && prop.files.length > 0) {
                   if (key === 'Thumbnail' || key === 'thumbnail') {
-                    const src = prop.files[0].file?.url || prop.files[0].external?.url
-                    try {
-                      post.thumbnail = src
-                        ? customMapImageUrl(src, undefined, {
-                            pageId: page.id,
-                            property: key,
-                            propertyType: prop.type,
-                            source: 'pageProperty',
-                          })
-                        : src
-                    } catch (e) {
-                      post.thumbnail = src
-                    }
+                    post.thumbnail = prop.files[0].file?.url || prop.files[0].external?.url
                   }
                 }
                 break

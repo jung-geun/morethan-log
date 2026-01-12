@@ -4,7 +4,6 @@ import { formatDate } from "src/libs/utils"
 import Tag from "../../../components/Tag"
 import { TPost } from "../../../types"
 import Image from "next/image"
-import { customMapImageUrl } from "src/libs/utils/notion/customMapImageUrl"
 import Category from "../../../components/Category"
 import styled from "@emotion/styled"
 
@@ -26,13 +25,7 @@ const PostCard: React.FC<Props> = ({ data }) => {
         {data.thumbnail && (
           <div className="thumbnail">
             <Image
-              src={(() => {
-                try {
-                  return customMapImageUrl(data.thumbnail)
-                } catch (e) {
-                  return data.thumbnail
-                }
-              })()}
+              src={data.thumbnail}
               fill
               alt={data.title}
               css={{ objectFit: "cover" }}
