@@ -1,17 +1,21 @@
 module.exports = {
   images: {
     domains: [
-      'www.notion.so', 
-      'lh5.googleusercontent.com', 
+      'pieroot.xyz',
+      'blog.pieroot.xyz',
+      'www.notion.so',
+      'lh5.googleusercontent.com',
+      'us-west-2.amazonaws.com',
+      's3.us-west-2.amazonaws.com',
       's3-us-west-2.amazonaws.com',
       'prod-files-secure.s3.us-west-2.amazonaws.com'  // Notion official API images
     ],
     // Enable image optimization with longer cache
-    minimumCacheTTL: 31536000, // 1 year in seconds
+    minimumCacheTTL: 3600, // 1 year in seconds
   },
   // Generate 404 page instead of failing build for missing pages
   generateBuildId: async () => {
-    return `build-${Date.now()}`
+    return `build-${ Date.now() }`
   },
   // Error handling during static generation
   onDemandEntries: {

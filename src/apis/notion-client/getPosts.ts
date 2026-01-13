@@ -1,6 +1,7 @@
 import { CONFIG } from "site.config"
 import { TPosts, TPost } from "src/types"
 import { getOfficialNotionClient } from "./notionClient"
+import { createProxyRequestUrl } from "src/libs/utils/image/proxyUtils"
 const { notionCache } = require("src/libs/notionCache")
 
 /**
@@ -103,14 +104,27 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
                   if (key === 'Slug' || key === 'slug') {
                     post.slug = prop.url
                   } else if (key === 'Thumbnail' || key === 'thumbnail') {
-                    post.thumbnail = prop.url
+                    // Proxy thumbnail URL through our image proxy
+                    post.thumbnail = createProxyRequestUrl(prop.url, {
+                      pageId: page.id,
+                      property: key,
+                      propertyType: 'url',
+                      source: 'postThumbnail'
+                    })
                   }
                 }
                 break
               case 'files':
                   if (prop.files && prop.files.length > 0) {
                   if (key === 'Thumbnail' || key === 'thumbnail') {
-                    post.thumbnail = prop.files[0].file?.url || prop.files[0].external?.url
+                    const originalUrl = prop.files[0].file?.url || prop.files[0].external?.url
+                    // Proxy thumbnail URL through our image proxy
+                    post.thumbnail = createProxyRequestUrl(originalUrl, {
+                      pageId: page.id,
+                      property: key,
+                      propertyType: 'files',
+                      source: 'postThumbnail'
+                    })
                   }
                 }
                 break

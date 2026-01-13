@@ -87,36 +87,36 @@ type Props = {
   recordMap: ExtendedRecordMap | null
 }
 
-  const NotionRenderer: FC<Props> = ({ recordMap }) => {
+const NotionRenderer: FC<Props> = ({ recordMap }) => {
   const [scheme] = useScheme()
   // Call hook unconditionally (must not be called conditionally after an early return)
   useDatabasePlaceholderEffect()
-  
+
   // Log all blocks in the current page (dev/test only)
   useEffect(() => {
     if (!recordMap) return
-    
+
     const blocks = Object.entries(recordMap.block)
     const totalBlocks = blocks.length
-    
+
     // Count blocks by type
     const typeStats: Record<string, number> = {}
     const specialBlocks: Array<{ id: string; type: string; info?: string }> = []
-    
+
     blocks.forEach(([blockId, blockData]) => {
       const type = blockData.value.type
       typeStats[type] = (typeStats[type] ?? 0) + 1
-      
+
       // Track special blocks
       if (['collection_view_page', 'collection_view', 'image', 'video', 'audio', 'pdf', 'file', 'equation'].includes(type)) {
         specialBlocks.push({ id: blockId, type })
       }
     })
-    
+
     if (process.env.NODE_ENV !== 'production') {
       console.group('📋 [Page Blocks]')
       console.log(`Total blocks: ${totalBlocks}`)
-      
+
       console.group('📊 Block Types Summary:')
       Object.entries(typeStats)
         .sort(([, a], [, b]) => b - a)
@@ -124,7 +124,7 @@ type Props = {
           console.log(`  ${type}: ${count}`)
         })
       console.groupEnd()
-      
+
       if (specialBlocks.length > 0) {
         console.group('🎯 Special Blocks:')
         specialBlocks.forEach(({ id, type }) => {
@@ -132,7 +132,7 @@ type Props = {
         })
         console.groupEnd()
       }
-      
+
       console.group('📄 All Blocks:')
       blocks.forEach(([blockId, blockData], index) => {
         const type = blockData.value.type
@@ -384,7 +384,7 @@ type Props = {
         if (process.env.NODE_ENV !== 'production') {
           console.log(`🔄 [ImageRefresh] Refreshing image for block ${blockId}`)
         }
-        
+
         const response = await fetch(`/api/refresh-image?blockId=${encodeURIComponent(blockId)}`)
         if (!response.ok) {
           throw new Error(`Failed to refresh: ${response.status}`)
@@ -398,18 +398,18 @@ type Props = {
         if (process.env.NODE_ENV !== 'production') {
           console.log(`✅ [ImageRefresh] Refreshed URL for block ${blockId}`)
         }
-        
+
         // Construct Notion proxy URL with fresh S3 URL
         const notionProxyUrl = new URL('https://www.notion.so/image/' + encodeURIComponent(data.url))
         notionProxyUrl.searchParams.set('cache', 'v2')
         notionProxyUrl.searchParams.set('table', 'block')
         notionProxyUrl.searchParams.set('id', blockId)
-        
+
         const freshUrl = notionProxyUrl.toString()
-        
+
         // Update the image source
         img.src = freshUrl
-        
+
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`❌ [ImageRefresh] Failed to refresh image for block ${blockId}:`, error)
@@ -423,12 +423,12 @@ type Props = {
     const handleImageError = (event: Event) => {
       const img = event.target as HTMLImageElement
       const container = img.closest('[data-block-id]')
-      
+
       if (!container) return
-      
+
       const blockId = container.getAttribute('data-block-id')
       if (!blockId) return
-      
+
       // Skip if already attempted to refresh this block
       if (refreshAttempts.has(blockId)) {
         if (process.env.NODE_ENV !== 'production') {
@@ -436,9 +436,9 @@ type Props = {
         }
         return
       }
-      
+
       refreshAttempts.add(blockId)
-      
+
       // Check if this is a Notion proxy URL that might be expired
       const currentSrc = img.src
       if (currentSrc.includes('notion.so/image/') || currentSrc.includes('amazonaws.com')) {
