@@ -1,11 +1,10 @@
-import React from "react"
-import PostHeader from "./PostHeader"
-import Footer from "./PostFooter"
-import CommentBox from "./CommentBox"
-import Category from "src/components/Category"
 import styled from "@emotion/styled"
-import NotionRenderer from "../components/NotionRenderer"
+import React from "react"
+import Category from "src/components/Category"
 import usePostQuery from "src/hooks/usePostQuery"
+import NotionRenderer from "../components/NotionRenderer"
+import Footer from "./PostFooter"
+import PostHeader from "./PostHeader"
 
 type Props = {}
 
@@ -30,9 +29,9 @@ const PostDetail: React.FC<Props> = () => {
         <div>
           <NotionRenderer recordMap={data.recordMap} />
         </div>
+        <Footer />
         {data.type[0] === "Post" && (
           <>
-            <Footer />
             {/* <CommentBox data={data} /> */}
           </>
         )}

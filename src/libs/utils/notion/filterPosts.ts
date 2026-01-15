@@ -1,5 +1,5 @@
-import { TPosts, TPostStatus, TPostType } from "src/types"
 import { debugLog } from "src/libs/utils/logger"
+import { TPosts, TPostStatus, TPostType } from "src/types"
 
 export type FilterPostsOptions = {
   acceptStatus?: TPostStatus[]
@@ -8,7 +8,7 @@ export type FilterPostsOptions = {
 
 const initialOption: FilterPostsOptions = {
   acceptStatus: ["Public"],
-  acceptType: ["Post"],
+  acceptType: ["Post", "Paper"],
 }
 const current = new Date()
 const tomorrow = new Date(current)
@@ -19,24 +19,24 @@ export function filterPosts(
   posts: TPosts,
   options: FilterPostsOptions = initialOption
 ) {
-  const { acceptStatus = ["Public"], acceptType = ["Post"] } = options
-  
+  const { acceptStatus = ["Public"], acceptType = ["Post", "Paper"] } = options
+
   debugLog(`🔍 [filterPosts] Filtering ${posts.length} posts with options:`, {
     acceptStatus,
     acceptType
   })
-  
+
   const filteredPosts = posts
     // filter data
     .filter((post) => {
       const postDate = new Date(post?.date?.start_date || post.createdTime)
       const isDev = process.env.NODE_ENV === 'development'
       const isValid = !(!post.title || !post.slug || (!isDev && postDate > tomorrow))
-      
+
       if (!isValid) {
         debugLog(`  ❌ [filterPosts] Rejected (invalid data): slug="${post.slug}", title="${post.title}"`)
       }
-      
+
       return isValid
     })
     // filter status
@@ -45,31 +45,31 @@ export function filterPosts(
       const isDev = process.env.NODE_ENV === 'development'
       const isPrivate = postStatus === 'Private'
       const isAccepted = acceptStatus.includes(postStatus) || (isDev && isPrivate)
-      
+
       if (!isAccepted) {
         debugLog(`  ❌ [filterPosts] Rejected (status): slug="${post.slug}", status="${postStatus}"`)
       } else if (post.slug === 'about') {
         debugLog(`  ✅ [filterPosts] About page passed status filter: status="${postStatus}"`)
       }
-      
+
       return isAccepted
     })
     // filter type
     .filter((post) => {
       const postType = post.type[0]
       const isAccepted = acceptType.includes(postType)
-      
+
       if (!isAccepted) {
         debugLog(`  ❌ [filterPosts] Rejected (type): slug="${post.slug}", type="${postType}"`)
       } else if (post.slug === 'about') {
         debugLog(`  ✅ [filterPosts] About page passed type filter: type="${postType}"`)
       }
-      
+
       return isAccepted
     })
-  
+
   debugLog(`🔍 [filterPosts] Result: ${filteredPosts.length} posts after filtering`)
-  
+
   // Log about page specifically
   const aboutPage = filteredPosts.find(p => p.slug === 'about')
   if (aboutPage) {
@@ -93,6 +93,6 @@ export function filterPosts(
       })
     }
   }
-  
+
   return filteredPosts
 }
