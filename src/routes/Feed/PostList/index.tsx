@@ -32,10 +32,17 @@ const PostList: React.FC<Props> = ({ q }) => {
     stored = null
   }
 
-  const effectiveTag = currentTag || (stored && stored.tag) || undefined
-  const effectiveCategory =
-    (router.query.category as string) || (stored && stored.category) || DEFAULT_CATEGORY
-  const effectiveOrder = currentOrder || (stored && stored.order) || 'desc'
+  // Check if tag/category/order is explicitly present in URL query.
+  // If explicitly set (even to empty), use URL value; otherwise fallback to sessionStorage.
+  const tagInQuery = 'tag' in router.query
+  const categoryInQuery = 'category' in router.query
+  const orderInQuery = 'order' in router.query
+
+  const effectiveTag = tagInQuery ? currentTag : (stored && stored.tag) || undefined
+  const effectiveCategory = categoryInQuery
+    ? (router.query.category as string)
+    : (stored && stored.category) || DEFAULT_CATEGORY
+  const effectiveOrder = orderInQuery ? currentOrder : (stored && stored.order) || 'desc'
 
   useEffect(() => {
     setFilteredPosts(() => {
