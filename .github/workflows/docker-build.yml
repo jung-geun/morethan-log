@@ -47,6 +47,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 기본 태그 생성 비활성화 - 명시적으로 지정한 태그만 생성
+          flavor: |
+            latest=false
           tags: |
             # main/master 브랜치 → latest 태그
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
