@@ -3,7 +3,7 @@ import { CONFIG } from "site.config"
 import { formatDate } from "src/libs/utils"
 import Tag from "../../../components/Tag"
 import { TPost } from "../../../types"
-import Image from "next/image"
+import ImageWithLoading from "../../../components/ImageWithLoading"
 import Category from "../../../components/Category"
 import styled from "@emotion/styled"
 
@@ -24,11 +24,10 @@ const PostCard: React.FC<Props> = ({ data }) => {
         )}
         {data.thumbnail && (
           <div className="thumbnail">
-            <Image
+            <ImageWithLoading
               src={data.thumbnail}
               fill
               alt={data.title}
-              css={{ objectFit: "cover" }}
             />
           </div>
         )}

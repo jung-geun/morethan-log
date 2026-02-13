@@ -3,7 +3,7 @@ import { ExtendedRecordMap } from "notion-types"
 // Block types that should be flattened (unsupported by react-notion-x)
 const UNSUPPORTED_BLOCK_TYPES = [
   'synced_block',
-  'audio',
+  // 'audio' removed: react-notion-x and custom Audio component support audio blocks
   'breadcrumb',
   'table_of_contents',
   'transclusion_container',

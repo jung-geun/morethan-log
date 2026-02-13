@@ -267,7 +267,7 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
         if (fileUrl) {
           properties.source = [[fileUrl]]
           if (blockData.caption && blockData.caption.length > 0) {
-            properties.title = convertRichText(blockData.caption)
+            properties.caption = convertRichText(blockData.caption)
           }
         }
         break

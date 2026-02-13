@@ -3,6 +3,7 @@ import Tag from "src/components/Tag"
 import { TPost } from "src/types"
 import { formatDate } from "src/libs/utils"
 import Image from "next/image"
+import ImageWithLoading from "src/components/ImageWithLoading"
 import React from "react"
 import styled from "@emotion/styled"
 
@@ -53,9 +54,8 @@ const PostHeader: React.FC<Props> = ({ data }) => {
         )}
         {data.thumbnail && (
           <div className="thumbnail">
-            <Image
+            <ImageWithLoading
               src={data.thumbnail}
-              css={{ objectFit: "cover" }}
               fill
               alt={data.title}
             />

@@ -1,4 +1,5 @@
 import { FC, useMemo } from "react"
+import { Text } from "react-notion-x"
 
 type AudioBlockProps = {
   block: any
@@ -12,13 +13,14 @@ type AudioSource = {
 
 export const Audio: FC<AudioBlockProps> = ({ block, className = "" }) => {
   const audioData = useMemo(() => {
-    const format = block?.value?.format || {}
-    const properties = block?.value?.properties || {}
-    const audio = block?.value?.audio
+    // react-notion-x는 block prop으로 BaseBlock을 직접 전달
+    // 즉, block = recordMap.block[id].value
+    const format = block?.format || {}
+    const properties = block?.properties || {}
 
     let source: AudioSource | null = null
 
-    // 1. properties.source 확인 (우선 순위)
+    // 1. properties.source 확인 (react-notion-x 방식)
     if (properties.source && Array.isArray(properties.source) && properties.source.length > 0) {
       const url = properties.source[0][0]
       if (url && typeof url === 'string') {
@@ -26,22 +28,12 @@ export const Audio: FC<AudioBlockProps> = ({ block, className = "" }) => {
       }
     }
 
-    // 2. audio.external.url 확인 (Notion API 표준)
-    if (!source && audio?.external?.url) {
-      source = { url: audio.external.url, type: 'external' }
-    }
-
-    // 3. audio.file.url 확인 (Notion 호스팅 파일)
-    if (!source && audio?.file?.url) {
-      source = { url: audio.file.url, type: 'external' }
-    }
-
-    // 4. format.display_source 확인
+    // 2. format.display_source 확인
     if (!source && format.display_source) {
       source = { url: format.display_source, type: 'external' }
     }
 
-    // 5. format.block_source 확인
+    // 3. format.block_source 확인
     if (!source && format.block_source) {
       for (const sourceItem of format.block_source) {
         if (sourceItem.url) {
@@ -58,15 +50,24 @@ export const Audio: FC<AudioBlockProps> = ({ block, className = "" }) => {
     return null
   }
 
+  const caption = block?.properties?.caption
+
   return (
-    <div className={`notion-audio ${className}`}>
-      <div className="notion-audio-wrapper">
-        <audio controls preload="metadata">
-          <source src={audioData.url} />
-          브라우저가 오디오 태그를 지원하지 않습니다.
-        </audio>
+    <figure className="notion-asset-wrapper notion-asset-wrapper-audio">
+      <div className={`notion-audio ${className}`}>
+        <div className="notion-audio-wrapper">
+          <audio controls preload="metadata">
+            <source src={audioData.url} />
+            브라우저가 오디오 태그를 지원하지 않습니다.
+          </audio>
+        </div>
       </div>
-    </div>
+      {caption && (
+        <figcaption className="notion-asset-caption">
+          <Text value={caption} block={block} />
+        </figcaption>
+      )}
+    </figure>
   )
 }
 

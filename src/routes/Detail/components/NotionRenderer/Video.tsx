@@ -1,4 +1,5 @@
 import { FC, useMemo } from "react"
+import { Text } from "react-notion-x"
 
 type VideoBlockProps = {
   block: any
@@ -56,36 +57,30 @@ const parseVideoUrl = (url: string): { url: string; type: VideoSource["type"] } 
 
 export const Video: FC<VideoBlockProps> = ({ block, className = "" }) => {
   const videoData = useMemo(() => {
-    const format = block?.value?.format || {}
-    const video = block?.value?.video
+    // react-notion-x는 block prop으로 BaseBlock을 직접 전달
+    // 즉, block = recordMap.block[id].value
+    const format = block?.format || {}
+    const properties = block?.properties || {}
 
     let source: VideoSource | null = null
 
-    // 1. video.external.url 확인 (Notion API 표준 - YouTube embed 등)
-    if (video?.external?.url) {
-      const parsed = parseVideoUrl(video.external.url)
-      if (parsed) {
-        source = {
-          ...parsed,
-          width: format.block_width,
-          height: format.block_height,
-          aspectRatio: format.block_aspect_ratio
+    // 1. properties.source 확인 (react-notion-x 방식)
+    if (properties.source && Array.isArray(properties.source) && properties.source.length > 0) {
+      const url = properties.source[0][0]
+      if (url && typeof url === 'string') {
+        const parsed = parseVideoUrl(url)
+        if (parsed) {
+          source = {
+            ...parsed,
+            width: format.block_width,
+            height: format.block_height,
+            aspectRatio: format.block_aspect_ratio
+          }
         }
       }
     }
 
-    // 2. video.file.url 확인 (Notion 호스팅 파일)
-    if (!source && video?.file?.url) {
-      source = {
-        url: video.file.url,
-        type: "external",
-        width: format.block_width,
-        height: format.block_height,
-        aspectRatio: format.block_aspect_ratio
-      }
-    }
-
-    // 3. format.display_source 확인
+    // 2. format.display_source 확인
     if (!source && format.display_source) {
       const parsed = parseVideoUrl(format.display_source)
       if (parsed) {
@@ -98,7 +93,7 @@ export const Video: FC<VideoBlockProps> = ({ block, className = "" }) => {
       }
     }
 
-    // 4. format.block_source 확인 (업로드된 비디오)
+    // 3. format.block_source 확인 (업로드된 비디오)
     if (!source && format.block_source) {
       for (const sourceItem of format.block_source) {
         if (sourceItem.url) {
@@ -116,7 +111,7 @@ export const Video: FC<VideoBlockProps> = ({ block, className = "" }) => {
       }
     }
 
-    // 5. format.block_external 확인
+    // 4. format.block_external 확인
     if (!source && format.block_external?.url) {
       const parsed = parseVideoUrl(format.block_external.url)
       if (parsed) {
@@ -224,12 +219,21 @@ export const Video: FC<VideoBlockProps> = ({ block, className = "" }) => {
     }
   }
 
+  const caption = block?.properties?.caption
+
   return (
-    <div className={`notion-video ${className}`}>
-      <div className="notion-video-wrapper" style={wrapperStyle}>
-        {renderVideo()}
+    <figure className="notion-asset-wrapper notion-asset-wrapper-video">
+      <div className={`notion-video ${className}`}>
+        <div className="notion-video-wrapper" style={wrapperStyle}>
+          {renderVideo()}
+        </div>
       </div>
-    </div>
+      {caption && (
+        <figcaption className="notion-asset-caption">
+          <Text value={caption} block={block} />
+        </figcaption>
+      )}
+    </figure>
   )
 }
 
