@@ -28,10 +28,12 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
+# Install curl for health checks and init calls
+RUN apk add --no-cache curl
+
 # 비루트 사용자 생성 (보안)
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-USER nextjs
 
 # 빌드 결과물 복사
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
@@ -39,8 +41,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Copy and setup entrypoint script
+COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Switch to non-root user
+USER nextjs
+
 VOLUME ["/app/logs"]
 
 EXPOSE 3000
 
-CMD ["yarn", "start"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

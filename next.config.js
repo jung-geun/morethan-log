@@ -1,8 +1,6 @@
 module.exports = {
   images: {
     domains: [
-      'pieroot.xyz',
-      'blog.pieroot.xyz',
       'www.notion.so',
       'lh5.googleusercontent.com',
       'us-west-2.amazonaws.com',

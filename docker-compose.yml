@@ -2,9 +2,10 @@ version: '3.8'
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/jung-geun/morethan-log:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: morethan-log
     ports:
       - "3000:3000"
@@ -12,6 +13,11 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      - NOTION_TOKEN=COPY_YOUR_NOTION_TOKEN_HERE
+      - NOTION_DATASOURCE_ID=COPY_YOUR_NOTION_DATASOURCE_ID_HERE
+      - NEXT_PUBLIC_GOOGLE_MEASUREMENT_ID=COPY_YOUR_GOOGLE_MEASUREMENT_ID_HERE
+      - REVALIDATE_HOURS=1
+      - TOKEN_FOR_REVALIDATE=GENERATE_RANDOM_STRING_AND_PUT_HERE
     restart: unless-stopped
     volumes:
       - logs-data:/app/logs
