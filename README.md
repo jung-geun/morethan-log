@@ -98,7 +98,7 @@ Pull Request 생성 시:
 
    1. ⭐ 이 저장소에 `Star`하고 `Fork` 합니다.
 
-   2. [Notion 템플릿](https://quasar-season-ed5.notion.site/12c38b5f459d4eb9a759f92fba6cea36?v=2e7962408e3842b2a1a801bf3546edda)을 클릭하면 브라우저에 Notion 페이지가 열립니다. 오른쪽 상단의 `Duplicate` 버튼을 클릭합니다.
+   2. [Notion 템플릿](https://pieroot.notion.site/307067c015d080d987eadd99c8369f92?v=307067c015d0817a87a8000c109eb446&source=copy_link)을 클릭하면 브라우저에 Notion 페이지가 열립니다. 오른쪽 상단의 `Duplicate` 버튼을 클릭합니다.
 
    3. Notion 앱에서 내 계정의 Notion 페이지를 확인할 수 있습니다.
 
@@ -134,17 +134,17 @@ NEXT_PUBLIC_GOOGLE_MEASUREMENT_ID=your_measurement_id  # 선택
 NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=your_verification  # 선택
 ```
 
-### docker-compose 사용
+### docker compose 사용
 
 ```bash
 # 백그라운드에서 실행
-docker-compose up -d
+docker compose up -d
 
 # 로그 확인
-docker-compose logs -f
+docker compose logs -f
 
 # 중지
-docker-compose down
+docker compose down
 ```
 
 ### 직접 Docker 실행
