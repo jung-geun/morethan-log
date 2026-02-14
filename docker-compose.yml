@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  app:
+  blog:
     image: ghcr.io/jung-geun/morethan-log:latest
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    container_name: morethan-log
+    container_name: blog
     ports:
       - "3000:3000"
     env_file:
