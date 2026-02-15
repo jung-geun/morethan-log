@@ -8,10 +8,9 @@
   },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "rm -f public/sitemap.xml public/sitemap-*.xml public/robots.txt",
+    "prebuild": "rm -f public/sitemap.xml public/sitemap-*.xml",
     "build": "next build",
     "start": "next start",
-    "postbuild": "next-sitemap --config next-sitemap.config.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "jest --config jest.config.js",
