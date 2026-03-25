@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next"
 import { getPosts } from "../../apis"
 import { TPost } from "../../types"
+const { notionCache } = require("../../libs/notionCache")
 
 // for all path revalidate, https://<your-site.com>/api/revalidate?secret=<token>
 // for specific path revalidate, https://<your-site.com>/api/revalidate?secret=<token>&path=<path>
@@ -18,10 +19,12 @@ export default async function handler(
     if (path && typeof path === "string") {
       await res.revalidate(path)
     } else {
-      const posts = await getPosts()
-      const revalidateRequests = posts.map((row: TPost) =>
-        res.revalidate(`/${row.slug}`)
-      )
+      notionCache.clear()
+      const posts = await getPosts({ bypassCache: true })
+      const revalidateRequests = [
+        res.revalidate('/'),
+        ...posts.map((row: TPost) => res.revalidate(`/${row.slug}`)),
+      ]
       await Promise.all(revalidateRequests)
       // Attempt to warm the sitemap CDN cache by requesting /sitemap.xml from
       // the current host. This ensures the sitemap is refreshed in front of
