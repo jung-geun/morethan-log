@@ -41,3 +41,6 @@ public/sitemap.xml
 logs/
 docker-compose.override.yml
 tsconfig.tsbuildinfo
+
+# Notion page cache (L2 filesystem cache)
+.notion-cache/

@@ -49,3 +49,53 @@ export type TCategories = {
 }
 
 export type SchemeType = "light" | "dark"
+
+// ── Notion Database types ─────────────────────────────────────────────────────
+
+export type TDbPropertyType =
+  | "title"
+  | "rich_text"
+  | "select"
+  | "multi_select"
+  | "status"
+  | "date"
+  | "url"
+  | "checkbox"
+  | "files"
+  | "number"
+  | "people"
+
+export type TDbPropertySchema = {
+  id: string
+  name: string
+  type: TDbPropertyType
+}
+
+export type TDbIcon =
+  | { type: "emoji"; emoji: string }
+  | { type: "external" | "file"; url: string }
+
+export type TDbRow = {
+  id: string
+  url: string
+  lastEdited: string
+  icon?: TDbIcon | null
+  values: Record<string, unknown>
+}
+
+export type TDbView = "table" | "gallery" | "list" | "board"
+
+export type TDbGroupOption = {
+  name: string
+  color: string
+}
+
+export type TNotionDatabase = {
+  id: string
+  title: string
+  properties: TDbPropertySchema[]
+  rows: TDbRow[]
+  view: TDbView
+  groupBy?: string | null
+  groupOptions?: TDbGroupOption[]
+}

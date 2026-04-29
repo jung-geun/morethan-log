@@ -4,6 +4,8 @@ import Link from "next/link"
 import { ExtendedRecordMap, Block } from "notion-types"
 import useScheme from "src/hooks/useScheme"
 import DatabasePlaceholder from "src/components/DatabasePlaceholder"
+import NotionDatabase from "src/components/NotionDatabase"
+import { useDatabaseQuery } from "src/hooks/useDatabasesQuery"
 import { useDatabasePlaceholderEffect } from "./useDatabasePlaceholderEffect"
 import { useListItemColorEffect } from "./useListItemColorEffect"
 import { useEffect } from "react"
@@ -85,6 +87,13 @@ const mapImageUrlWrapper = (url: string | undefined, block: Block) => {
 
 type Props = {
   recordMap: ExtendedRecordMap | null
+}
+
+// Renders a single database block: fetches from React Query cache; falls back to placeholder.
+const DatabaseBlockRenderer: FC<{ databaseId: string; title: string }> = ({ databaseId, title }) => {
+  const database = useDatabaseQuery(databaseId)
+  if (database) return <NotionDatabase database={database} />
+  return <DatabasePlaceholder databaseId={databaseId} title={title} />
 }
 
 const NotionRenderer: FC<Props> = ({ recordMap }) => {
@@ -525,14 +534,14 @@ const NotionRenderer: FC<Props> = ({ recordMap }) => {
         mapImageUrl={mapImageUrlWrapper}
       />
 
-      {/* Render database placeholders inline - they will be positioned by CSS */}
+      {/* Render database blocks inline — positioned by useDatabasePlaceholderEffect */}
       {databaseBlocks.map(({ blockId, databaseId, title }) => (
         <div
           key={`placeholder-${blockId}`}
           data-database-id={blockId}
           className="database-placeholder-wrapper"
         >
-          <DatabasePlaceholder databaseId={databaseId} title={title} />
+          <DatabaseBlockRenderer databaseId={databaseId} title={title} />
         </div>
       ))}
     </StyledWrapper>

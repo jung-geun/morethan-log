@@ -3,7 +3,7 @@ import { filterPosts, optimizeRecordMap } from "src/libs/utils/notion"
 import { CONFIG } from "site.config"
 import { NextPageWithLayout } from "../types"
 import CustomError from "src/routes/Error"
-import { getRecordMap, getPosts, getPostBySlug } from "src/apis"
+import { getRecordMap, getPosts, getPostBySlug, getDatabase } from "src/apis"
 import MetaConfig from "src/components/MetaConfig"
 import { GetStaticProps } from "next"
 import { queryClient } from "src/libs/react-query"
@@ -88,6 +88,25 @@ export const getStaticProps: GetStaticProps = async (context) => {
     try {
       const rawRecordMap = await getRecordMap(postDetail?.id!, posts)
       const recordMap = optimizeRecordMap(rawRecordMap)
+
+      // Prefetch inline databases found in the page
+      if (recordMap) {
+        const databaseBlockIds = Object.entries(recordMap.block)
+          .filter(([, b]) => b.value.type === "collection_view_page")
+          .map(([id, b]) => ({
+            id,
+            format: (b.value as any).format,
+          }))
+
+        await Promise.all(
+          databaseBlockIds.map(async ({ id, format }) => {
+            const db = await getDatabase(id, format).catch(() => null)
+            if (db) {
+              await queryClient.prefetchQuery(queryKey.database(id), () => db)
+            }
+          })
+        )
+      }
 
       await queryClient.prefetchQuery(queryKey.post(`${slug}`), () => ({
         ...postDetail,
