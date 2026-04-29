@@ -13,7 +13,7 @@ const CONFIG = {
   projects: [
     {
       name: `openstack-afterglow`,
-      href: "https://github.com/jung-geun?tab=repositories",
+      href: "https://github.com/jung-geun/openstack-afterglow",
     },
     {
       name: `NFD2NFC`,
