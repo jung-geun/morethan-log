@@ -2,6 +2,10 @@ import { ExtendedRecordMap } from "notion-types"
 import { getOfficialNotionClient } from "./notionClient"
 import { optimizeRecordMap } from "src/libs/utils/notion/optimizeRecordMap"
 import { TPosts } from "src/types"
+import { cacheStore, keys } from "src/libs/cache"
+import { CONFIG } from "site.config"
+
+const RECORD_MAP_TTL_MS = CONFIG.revalidateTime * 1000
 
 /**
  * Convert Notion presigned URLs to our proxy URLs to prevent expiration
@@ -471,6 +475,35 @@ async function processBlock(block: any, parentId: string, notion: any, recordMap
 export const getRecordMap = async (pageId: string, allPosts?: TPosts): Promise<ExtendedRecordMap | null> => {
   const notion = getOfficialNotionClient()
 
+  // Peek at last_edited_time to build a version-aware cache key.
+  // This is a lightweight single API call; the heavy block-tree fetch is skipped on hit.
+  let lastEdited = "unknown"
+  try {
+    const meta = await notion.pages.retrieve({ page_id: pageId })
+    lastEdited = (meta as any).last_edited_time ?? "unknown"
+  } catch {
+    // fallback: use pageId-only key (may serve stale content)
+  }
+
+  const cached = await cacheStore.get<ExtendedRecordMap>(keys.recordMap(pageId, lastEdited))
+  if (cached) {
+    console.log(`✅ Cache hit for recordMap: ${pageId}`)
+    return cached
+  }
+
+  const result = await fetchRecordMap(pageId, lastEdited, allPosts, notion)
+  if (result) {
+    await cacheStore.set(keys.recordMap(pageId, lastEdited), result, RECORD_MAP_TTL_MS)
+  }
+  return result
+}
+
+async function fetchRecordMap(
+  pageId: string,
+  lastEdited: string,
+  allPosts: TPosts | undefined,
+  notion: any
+): Promise<ExtendedRecordMap | null> {
   let retryCount = 0
   const maxRetries = 3
 

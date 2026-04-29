@@ -2,30 +2,32 @@ import { CONFIG } from "site.config"
 import { TPosts, TPost } from "src/types"
 import { getOfficialNotionClient } from "./notionClient"
 import { createProxyRequestUrl } from "src/libs/utils/image/proxyUtils"
-const { notionCache } = require("src/libs/notionCache")
+import { cacheStore, keys } from "src/libs/cache"
+
+const POSTS_TTL_MS = Math.floor((CONFIG.revalidateTime / 2) * 1000)
 
 /**
  * Fetch all posts from Notion database using official @notionhq/client
  */
 export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPosts> => {
   const dataSourceId = process.env.NOTION_DATASOURCE_ID
-  
+
   if (!dataSourceId) {
-    console.error('❌ NOTION_DATASOURCE_ID is required')
+    console.error("❌ NOTION_DATASOURCE_ID is required")
     return []
   }
-  
-  // Check cache first
-  const cacheKey = `posts_${dataSourceId}`
+
   const bypass = options?.bypassCache === true
-  const cachedData = bypass ? null : notionCache.get(cacheKey)
-  if (cachedData) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('✅ Cache hit for:', cacheKey)
-    }
-    return cachedData as TPosts
+  if (bypass) {
+    await cacheStore.invalidate(keys.posts(dataSourceId))
   }
-  
+
+  return cacheStore.getOrSet(keys.posts(dataSourceId), POSTS_TTL_MS, () =>
+    fetchFromNotion(dataSourceId)
+  )
+}
+
+async function fetchFromNotion(dataSourceId: string): Promise<TPosts> {
   const notion = getOfficialNotionClient()
 
   let retryCount = 0
@@ -34,130 +36,110 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
   while (retryCount < maxRetries) {
     try {
       console.log(`📡 Fetching posts from Notion DataSource: ${dataSourceId}`)
-      
-      // Query all pages from the database
+
       const response = await notion.dataSources.query({
         data_source_id: dataSourceId,
-        page_size: 100, // Maximum allowed
+        page_size: 100,
       })
 
       console.log(`✅ Found ${response.results.length} posts`)
 
-      // Transform Notion API response to our post format
       const posts: TPosts = response.results.map((page: any) => {
-        const post: any = {
-          id: page.id,
-        }
+        const post: any = { id: page.id }
 
-        // Extract properties from the page
         if (page.properties) {
           for (const [key, value] of Object.entries(page.properties)) {
             const prop = value as any
             switch (prop.type) {
-              case 'title':
-                if (prop.title && prop.title.length > 0) {
+              case "title":
+                if (prop.title?.length > 0) {
                   post.title = prop.title[0].plain_text
                 }
                 break
-              case 'rich_text':
-                if (prop.rich_text && prop.rich_text.length > 0) {
-                  post[key.toLowerCase()] = prop.rich_text[0].plain_text
-                }
-                break
-              case 'select':
-                if (prop.select) {
-                  if (key === 'Status' || key === 'status') {
-                    post.status = [prop.select.name]
-                  } else if (key === 'Type' || key === 'type') {
-                    // Normalize type to start with uppercase (Post, Paper, Page)
-                    const typeValue = prop.select.name
-                    const normalizedType = typeValue.charAt(0).toUpperCase() + typeValue.slice(1).toLowerCase()
-                    console.log(`🔄 [getPosts] Type normalization: "${typeValue}" -> "${normalizedType}" (slug: ${post.slug})`)
-                    post.type = [normalizedType]
-                  } else if (key === 'Category' || key === 'category') {
-                    post.category = [prop.select.name]  // Array format for consistency
+              case "rich_text":
+                if (prop.rich_text?.length > 0) {
+                  if (key === "Summary" || key === "summary") {
+                    post.summary = prop.rich_text[0].plain_text
+                  } else {
+                    post[key.toLowerCase()] = prop.rich_text[0].plain_text
                   }
                 }
                 break
-              case 'multi_select':
-                if (prop.multi_select && prop.multi_select.length > 0) {
-                  if (key === 'Tags' || key === 'tags') {
+              case "select":
+                if (prop.select) {
+                  if (key === "Status" || key === "status") {
+                    post.status = [prop.select.name]
+                  } else if (key === "Type" || key === "type") {
+                    const typeValue = prop.select.name
+                    const normalizedType =
+                      typeValue.charAt(0).toUpperCase() + typeValue.slice(1).toLowerCase()
+                    post.type = [normalizedType]
+                  } else if (key === "Category" || key === "category") {
+                    post.category = [prop.select.name]
+                  }
+                }
+                break
+              case "multi_select":
+                if (prop.multi_select?.length > 0) {
+                  if (key === "Tags" || key === "tags") {
                     post.tags = prop.multi_select.map((tag: any) => tag.name)
                   }
                 }
                 break
-              case 'date':
+              case "date":
                 if (prop.date) {
-                  if (key === 'Date' || key === 'date') {
-                    post.date = {
-                      start_date: prop.date.start,
-                    }
-                    // Only add end_date if it exists
-                    if (prop.date.end) {
-                      post.date.end_date = prop.date.end
-                    }
+                  if (key === "Date" || key === "date") {
+                    post.date = { start_date: prop.date.start }
+                    if (prop.date.end) post.date.end_date = prop.date.end
                   }
                 }
                 break
-              case 'url':
+              case "url":
                 if (prop.url) {
-                  if (key === 'Slug' || key === 'slug') {
+                  if (key === "Slug" || key === "slug") {
                     post.slug = prop.url
-                  } else if (key === 'Thumbnail' || key === 'thumbnail') {
-                    // Proxy thumbnail URL through our image proxy
+                  } else if (key === "Thumbnail" || key === "thumbnail") {
                     post.thumbnail = createProxyRequestUrl(prop.url, {
                       pageId: page.id,
                       property: key,
-                      propertyType: 'url',
-                      source: 'postThumbnail'
+                      propertyType: "url",
+                      source: "postThumbnail",
                     })
                   }
                 }
                 break
-              case 'files':
-                  if (prop.files && prop.files.length > 0) {
-                  if (key === 'Thumbnail' || key === 'thumbnail') {
-                    const originalUrl = prop.files[0].file?.url || prop.files[0].external?.url
-                    // Proxy thumbnail URL through our image proxy
+              case "files":
+                if (prop.files?.length > 0) {
+                  if (key === "Thumbnail" || key === "thumbnail") {
+                    const originalUrl =
+                      prop.files[0].file?.url || prop.files[0].external?.url
                     post.thumbnail = createProxyRequestUrl(originalUrl, {
                       pageId: page.id,
                       property: key,
-                      propertyType: 'files',
-                      source: 'postThumbnail'
+                      propertyType: "files",
+                      source: "postThumbnail",
                     })
                   }
-                }
-                break
-              case 'checkbox':
-                if (key === 'Summary' || key === 'summary') {
-                  post.summary = prop.checkbox
                 }
                 break
             }
           }
         }
 
-        // Add metadata
         post.createdTime = page.created_time
-        post.fullWidth = false // Default value
+        post.fullWidth = false
 
         return post as TPost
       })
 
-      // Filter out posts without 'Public' or 'PublicOnDetail' status
-      const publicPosts = posts.filter(post => {
+      const publicPosts = posts.filter((post) => {
         const status = post.status?.[0]
-        const isPublic = status === 'Public' || status === 'PublicOnDetail'
-        const isPrivate = status === 'Private'
-        const isDev = process.env.NODE_ENV === 'development'
-        
-        if (!isPublic && !(isDev && isPrivate) && post.slug) {
-          console.log(`🔒 [getPosts] Filtered out (not public): slug="${post.slug}", status="${status}"`)
-        }
+        const isPublic = status === "Public" || status === "PublicOnDetail"
+        const isPrivate = status === "Private"
+        const isDev = process.env.NODE_ENV === "development"
         return isPublic || (isDev && isPrivate)
       })
 
-      // Sort by date (newest first)
       publicPosts.sort((a, b) => {
         const dateA = new Date(a.date?.start_date || a.createdTime || 0)
         const dateB = new Date(b.date?.start_date || b.createdTime || 0)
@@ -165,37 +147,23 @@ export const getPosts = async (options?: { bypassCache?: boolean }): Promise<TPo
       })
 
       console.log(`✅ Filtered to ${publicPosts.length} public posts`)
-
-      // Cache the successful result (unless bypass requested)
-      if (!bypass) {
-        notionCache.set(cacheKey, publicPosts)
-      }
-
       return publicPosts
-
     } catch (error: any) {
       retryCount++
       console.error(`❌ Notion API attempt ${retryCount}/${maxRetries} failed:`, error.message)
 
-      if (error.code === 'object_not_found') {
-        console.error('❌ DataSource not found. Make sure:')
-        console.error('   1. NOTION_DATASOURCE_ID is correct')
-        console.error('   2. Integration is connected to the database page')
-        console.error('   3. Database is shared with the Integration')
-        
-        // Don't retry for object_not_found errors
+      if (error.code === "object_not_found") {
+        console.error("❌ DataSource not found.")
         return []
       }
 
       if (retryCount === maxRetries) {
-        console.error('❌ Failed to fetch posts after all retries')
+        console.error("❌ Failed to fetch posts after all retries")
         return []
       }
 
-      // Exponential backoff
       const waitTime = Math.pow(2, retryCount) * 2000
-      console.log(`⏳ Waiting ${waitTime / 1000} seconds before retry...`)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
     }
   }
 

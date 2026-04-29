@@ -13,6 +13,7 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^src/(.*)$': '<rootDir>/src/$1',
+    '^site\\.config$': '<rootDir>/site.config.js',
   },
   transform: {
     '^.+\\.(ts|tsx)$': 'ts-jest',
